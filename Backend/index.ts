@@ -1,12 +1,26 @@
 import express from "express";
 const app = express();
+import cors from "cors";
 import { prisma } from "./lib/prisma";
 import { IdSchema, InfrastructureSchema, UpdateInfrastructureSchema } from "./Schemas/InfrastructureSchema.schema";
 import { errorHandler } from "./utils/middleware";
 import { ValidationError, NotFoundError } from "./utils/errors";
 import { config } from "./utils/config";
+import { rateLimiter } from "./utils/rateLimiter";
 
+app.use(rateLimiter);
+app.use(cors());
 app.use(express.json());
+
+// Health check
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        success: true,
+        status: "ok",
+        uptime: process.uptime(), // seconds since server started
+        timestamp: new Date().toISOString() // current server time
+    })
+})
 
 app.post("/api/infrastructure", async(req, res) => {
     const infrastructureResult = InfrastructureSchema.safeParse(req.body);

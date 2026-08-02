@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6"
   },
   "peerDependencies": {
@@ -16,8 +17,10 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "ip": "^2.0.1",
     "pg": "^8.22.0",
     "prisma": "^7.9.1",
     "uuid": "^14.0.1",
