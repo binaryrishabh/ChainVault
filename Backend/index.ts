@@ -2,7 +2,7 @@ import express from "express";
 const app = express();
 import cors from "cors";
 import { prisma } from "./lib/prisma";
-import { IdSchema, InfrastructureSchema, UpdateInfrastructureSchema } from "./Schemas/InfrastructureSchema.schema";
+import { IdSchema, InfrastructureSchema, UpdateInfrastructureSchema } from "./ZodSchemas/InfrastructureSchema.schema";
 import { errorHandler } from "./utils/middleware";
 import { ValidationError, NotFoundError } from "./utils/errors";
 import { config } from "./utils/config";
@@ -32,7 +32,7 @@ app.post("/api/infrastructure", async(req, res) => {
 
     const { name, layout } = infrastructureResult.data;
 
-    const infrastructureCreated = await prisma.infrastructure.create({
+    const createdInfrastructure = await prisma.infrastructure.create({
         data: {
             name,
             layout: layout || {}
@@ -42,7 +42,7 @@ app.post("/api/infrastructure", async(req, res) => {
     res.status(201).json({
         success: true,
         message: "The infrastructure created successfully",
-        infrastructureCreated
+        createdInfrastructure
     })
     return;
 });
@@ -148,6 +148,22 @@ app.delete("/api/infrastructure/:id", async(req, res) => {
         message: "Infrastructure deleted successfully!",
         deletedInfrastructure
     })
+})
+
+// delete all end point
+app.delete("/api/infrastructure", async(req, res) => {
+  const allDeletedInfrastructure = await prisma.infrastructure.deleteMany();
+
+  if(allDeletedInfrastructure.count === 0) {
+    throw new NotFoundError("No infrastructure found to delete");
+  }
+
+  res.status(200).json({
+      success: true,
+      message: "Get all infrastructure",
+      allDeletedInfrastructure
+  });
+  return;
 })
 
 app.use(errorHandler)

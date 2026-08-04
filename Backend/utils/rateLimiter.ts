@@ -1,3 +1,23 @@
+/**
+ * CURRENT: Sliding Window Log - In-Memory Map
+ * 
+ * KNOWN ISSUES TO FIX (Phase 5 - Docker/Deployment):
+ * 
+ * 1. Trust Proxy: Behind Nginx, req.ip resolves to Nginx's internal IP.
+ *    FIX: app.set('trust proxy', 1) + use X-Forwarded-For header.
+ * 
+ * 2. Multi-Instance: In-memory state doesn't scale beyond single process.
+ *    FIX: Redis sorted sets (ZADD + ZREMRANGEBYSCORE + ZCARD).
+ *    Each IP gets a sorted set. Score = timestamp. Expired entries auto-removed.
+ *    ioredis already in dependencies for BullMQ (Phase 2).
+ * 
+ * 3. Memory: Map grows with unique IPs. Cleanup interval handles idle IPs,
+ *    but high-traffic IPs keep full arrays. In production with 100K+ IPs,
+ *    Redis with EXPIRE handles TTL automatically.
+ * 
+ * MIGRATION PLAN: Replace in-memory Map with Redis sorted sets during Phase 5.
+ * Algorithm stays Sliding Window Log. Storage layer changes.
+ */
 import type { Request, Response, NextFunction } from "express";
 
 const MAX_REQUESTS = 10;
