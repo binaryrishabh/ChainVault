@@ -1,0 +1,24 @@
+interface TopbarButtonProps {
+  icon: string;
+  label: string;
+  onclick?: () => void;
+  variant?: "new" | "load" | "save" | "update" | "delete" | "default";
+}
+
+export function TopbarButton({ icon, label, onclick, variant="default"}: TopbarButtonProps) {
+  const baseStyles = "px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer";
+  const variableStyles = {
+    new: "bg-gray-800 hover:bg-green-700 text-gray-300",
+    load: "bg-gray-800 hover:bg-gray-700 text-gray-300",
+    save: "bg-gray-600 hover:bg-blue-500 text-white",
+    update: "bg-gray-600 hover:bg-yellow-500 text-white",
+    delete: "bg-gray-700 hover:bg-red-600 text-gray-200",
+    default: "bg-gray-700 hover:bg-gray-600 text-gray-200"
+  }
+  
+  return (
+    <button className={ `${baseStyles} ${variableStyles[variant]}` } onClick={onclick}>
+      { icon } { label }
+    </button>
+  )
+}
