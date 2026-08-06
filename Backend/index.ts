@@ -2,11 +2,12 @@ import express from "express";
 const app = express();
 import cors from "cors";
 import { prisma } from "./lib/prisma";
-import { IdSchema, InfrastructureSchema, UpdateInfrastructureSchema } from "./ZodSchemas/InfrastructureSchema.schema";
+import { IdSchema, InfrastructureSchema, UpdateInfrastructureSchema } from "./zod_schemas/InfrastructureSchema.schema";
 import { errorHandler } from "./utils/middleware";
 import { ValidationError, NotFoundError } from "./utils/errors";
 import { config } from "./utils/config";
 import { rateLimiter } from "./utils/rateLimiter";
+import { deploymentQueue } from "./infra/queue";
 
 app.use(rateLimiter);
 app.use(cors());
@@ -22,6 +23,8 @@ app.get("/health", (req, res) => {
     })
 })
 
+
+/* The infra CRUD code */
 app.post("/api/infrastructure", async(req, res) => {
     const infrastructureResult = InfrastructureSchema.safeParse(req.body);
 
@@ -164,6 +167,17 @@ app.delete("/api/infrastructure", async(req, res) => {
       allDeletedInfrastructure
   });
   return;
+})
+
+
+app.post("/api/test-deploy", async(req, res) => {
+  await deploymentQueue.add("test-deployment", {
+    deploymentId: "test-123",
+    resources: ["vm", "database"]
+  });
+  res.status(200).json({
+    message: "Job added to queue"
+  })
 })
 
 app.use(errorHandler)

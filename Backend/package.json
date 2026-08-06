@@ -18,13 +18,16 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "bullmq": "^6.0.8",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "http": "^0.0.1-security",
+    "ioredis": "^6.0.0",
     "ip": "^2.0.1",
     "pg": "^8.22.0",
     "prisma": "^7.9.1",
+    "redis": "^6.2.0",
     "uuid": "^14.0.1",
     "ws": "^8.21.2",
     "zod": "^4.4.3"
