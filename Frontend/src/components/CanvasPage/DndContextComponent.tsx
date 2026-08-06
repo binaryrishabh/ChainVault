@@ -243,16 +243,18 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
             let x = 50, y = 50;
             if(canvasRect) {
               // Get the initial position of the drag relative to canvas
-              const pointerEEvent = event.activatorEvent as PointerEvent;
-              x = pointerEEvent.clientX - canvasRect.left + delta.x - 20; // these - constant values are according to the visuals
-              y = pointerEEvent.clientY - canvasRect.top + delta.y - 20;
+              const pointerEvent = event.activatorEvent as PointerEvent;
+              x = pointerEvent.clientX - canvasRect.left + delta.x - 20; // these - constant values are according to the visuals
+              y = pointerEvent.clientY - canvasRect.top + delta.y - 20;
 
               if(x < 0 || y < 0 ){
                 return;
               }
-
-              x = Math.max(x, 0);
-              y = Math.max(y, 0);
+              
+              const GRID_SIZE = 24; // matches background dot grid
+              
+              x = Math.round(x / GRID_SIZE) * GRID_SIZE;
+              y = Math.round(y / GRID_SIZE) * GRID_SIZE;
             }
 
             const isOverlapping = canvasItems.some(
