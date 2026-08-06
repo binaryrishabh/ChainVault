@@ -1,5 +1,5 @@
   import { DndContext, DragOverlay, PointerSensor, TouchSensor, MouseSensor, useSensor, useSensors } from "@dnd-kit/core";
-  import { useState } from "react";
+  import { useEffect, useState } from "react";
   import { Canvas } from "./Canvas";
   import { Sidebar } from "./Sidebar";
   import { Topbar } from "./Topbar";
@@ -30,15 +30,57 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
     const [showLayoutDropdown, setShowLayoutDropdown] = useState<boolean>(false);
     const [savedLayouts, setSavedLayouts] = useState<Infrastructure[]>([]);
 
-    /* ----------------------Topbar dropdown------------------- */
-    const handleOpenCloseDropDownNameClick = async() => {
-      if(!showLayoutDropdown) {
-        const allInfrastructure = await getAllInfrastructure();
-        setSavedLayouts(allInfrastructure);
+    /* ------Save the current state of canvas icons into localstorage prevents vanish on reloads----- */
+    // state tracking for we have initialized the current state from localstorage or not
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Restore on mount
+    // Fetch for the first time when browser loads the page or reloads the page
+    useEffect(() => {
+      const infra = localStorage.getItem("Infraforge_Infrastucture_Draft");
+      if (infra) {
+        const parsed = JSON.parse(infra);
+        setCanvasItems(parsed.canvasItems);
+        setCurrentLayoutId(parsed.currentLayoutId);
+        setCurrentLayoutName(parsed.currentLayoutName);
+        setCurrentLayoutSaved(parsed.saved);
       }
+      setIsInitialized(true); // Mark i.e. we got the current state from localstorage
+    }, []);
+
+    // Save to localStorage current infrastaructure state, but only after getting the current state from browser
+    useEffect(() => {
+      if (!isInitialized) return; // ← Skip on first render
+      
+      localStorage.setItem("Infraforge_Infrastucture_Draft", JSON.stringify({
+        canvasItems,
+        currentLayoutId,
+        currentLayoutName,
+        saved: currentLayoutSaved
+      }));
+    }, [canvasItems, currentLayoutId, currentLayoutName, currentLayoutSaved]);
+
+    /* ----------------------Topbar dropdown------------------- */
+    // fetch infrastructure to fill dropdown
+    useEffect(() => {
+      const fetchInfrastructures = async () => {
+        try {
+          const allInfrastructures = await getAllInfrastructure();
+          setSavedLayouts(allInfrastructures);
+        }
+        catch(err) {
+          console.log("fetchInfrastructures error: "+ err);
+        }
+      }
+      fetchInfrastructures();
+    }, [currentLayoutSaved, canvasItems])
+
+    // Handle open close of infrastructure dropdown button
+    const handleOpenCloseDropDownNameClick = async() => {
       setShowLayoutDropdown(!showLayoutDropdown);
     }
 
+    // Select particular infrastrcture from dropdown lists
     const handleSelectLayout = (infrastructure: Infrastructure) => {
       setCurrentLayoutId(infrastructure.id);
       setCurrentLayoutName(infrastructure.name);
@@ -46,6 +88,22 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
       setCurrentLayoutSaved(true);
       setShowLayoutDropdown(false);
     }
+
+    // close dropdown by clicking anywhere except the dropdown itself
+    useEffect(() => {
+      const handleClickOutsideRemoveDropdown = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if(!target.closest(".dropdown-container")) {
+          setShowLayoutDropdown(false);
+        }
+      }
+
+      if(showLayoutDropdown) { // add event listener only if dropdown is open
+        document.addEventListener("click", handleClickOutsideRemoveDropdown);
+      }
+
+      return () => document.removeEventListener("click", handleClickOutsideRemoveDropdown)
+    }, [showLayoutDropdown])
     
     /* ----------------------Topbar buttons------------------ */
     // New canvas button
@@ -58,6 +116,7 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
       setCurrentLayoutId(null);
       setCurrentLayoutName(null);
       setCurrentLayoutSaved(true);
+      localStorage.removeItem("Infraforge_Infrastucture_Draft");
     }
 
     // Infrastructure save button Make an input box for it and improve the UI
@@ -76,34 +135,13 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
         setCurrentLayoutId(createdInfrastructure.id);
         setCurrentLayoutName(createdInfrastructure.name);
         setCurrentLayoutSaved(true);
+        
         console.log(createdInfrastructure.id);
         alert("saved!");
       }
       catch(err) {
         alert("Save failed");
         console.log(err);      
-      }
-    }
-    
-    // Infrastructure loading button
-    const handleLoad = async() => {
-      try {
-        const allInfrastructure = await getAllInfrastructure();
-        if(allInfrastructure.length === 0) {
-          alert("No saved layouts found");
-          return;
-        }
-        const { id, name, layout } = allInfrastructure[0];
-        setCurrentLayoutId(id);
-        setCurrentLayoutName(name);
-        setCanvasItems(layout.icons || []);
-        setCurrentLayoutSaved(true);
-        console.log("Loaded: "+ id +" "+ name);
-        alert("loaded");
-      }
-      catch (err) {
-        alert("load failed");
-        console.log(err);
       }
     }
 
@@ -155,8 +193,11 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
       try {
         const deletedInfrastructure = await deleteInfrastructure(currentLayoutId);
         setCurrentLayoutId(null);
+        setCurrentLayoutName(null);
         setCanvasItems([]);
         setCurrentLayoutSaved(true);
+        setIsInitialized(false);
+        localStorage.removeItem("Infraforge_Infrastucture_Draft");
         console.log("deleted: "+ deletedInfrastructure); 
         alert("Deleted!");
       }
@@ -188,7 +229,8 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
 
           
           if(event.over?.id === "canvas") {
-            setCurrentLayoutSaved(false); // saving there was a new item added to the canvas
+            setCurrentLayoutSaved(false); // tracking there was a new item added to the canvas
+            setIsInitialized(true); // saving to localstorage there was a new item added to the canvas
 
             const { active, delta } = event;
             const emoji = active.data.current?.emoji || "🖥";
@@ -255,8 +297,7 @@ import { type Infrastructure } from "../../Types/Infrastructure.types";
             currentLayoutId={currentLayoutId} 
             currentLayoutName={currentLayoutName} 
             handleNew={handleNew} 
-            handleSave={handleSave} 
-            handleLoad={handleLoad} 
+            handleSave={handleSave}
             handleUpdate={handleUpdate} 
             handleDelete={handleDelete} 
           />

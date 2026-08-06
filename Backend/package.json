@@ -9,7 +9,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.18.1"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -20,10 +21,12 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "http": "^0.0.1-security",
     "ip": "^2.0.1",
     "pg": "^8.22.0",
     "prisma": "^7.9.1",
     "uuid": "^14.0.1",
+    "ws": "^8.21.2",
     "zod": "^4.4.3"
   }
 }
