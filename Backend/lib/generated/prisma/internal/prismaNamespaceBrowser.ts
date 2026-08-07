@@ -51,7 +51,9 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  Infrastructure: 'Infrastructure'
+  Infrastructure: 'Infrastructure',
+  Deployment: 'Deployment',
+  Outbox: 'Outbox'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -80,6 +82,36 @@ export const InfrastructureScalarFieldEnum = {
 } as const
 
 export type InfrastructureScalarFieldEnum = (typeof InfrastructureScalarFieldEnum)[keyof typeof InfrastructureScalarFieldEnum]
+
+
+export const DeploymentScalarFieldEnum = {
+  id: 'id',
+  infrastructureId: 'infrastructureId',
+  status: 'status',
+  resourceCount: 'resourceCount',
+  stages: 'stages',
+  timeline: 'timeline',
+  chaosEvents: 'chaosEvents',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type DeploymentScalarFieldEnum = (typeof DeploymentScalarFieldEnum)[keyof typeof DeploymentScalarFieldEnum]
+
+
+export const OutboxScalarFieldEnum = {
+  id: 'id',
+  eventType: 'eventType',
+  payload: 'payload',
+  status: 'status',
+  retries: 'retries',
+  maxRetries: 'maxRetries',
+  processedAt: 'processedAt',
+  error: 'error',
+  createdAt: 'createdAt'
+} as const
+
+export type OutboxScalarFieldEnum = (typeof OutboxScalarFieldEnum)[keyof typeof OutboxScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -112,4 +144,12 @@ export const JsonNullValueFilter = {
 } as const
 
 export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 

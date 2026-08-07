@@ -186,6 +186,7 @@ export type InfrastructureWhereInput = {
   layout?: Prisma.JsonFilter<"Infrastructure">
   createdAt?: Prisma.DateTimeFilter<"Infrastructure"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Infrastructure"> | Date | string
+  deployments?: Prisma.DeploymentListRelationFilter
 }
 
 export type InfrastructureOrderByWithRelationInput = {
@@ -195,6 +196,7 @@ export type InfrastructureOrderByWithRelationInput = {
   layout?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  deployments?: Prisma.DeploymentOrderByRelationAggregateInput
 }
 
 export type InfrastructureWhereUniqueInput = Prisma.AtLeast<{
@@ -207,6 +209,7 @@ export type InfrastructureWhereUniqueInput = Prisma.AtLeast<{
   layout?: Prisma.JsonFilter<"Infrastructure">
   createdAt?: Prisma.DateTimeFilter<"Infrastructure"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Infrastructure"> | Date | string
+  deployments?: Prisma.DeploymentListRelationFilter
 }, "id">
 
 export type InfrastructureOrderByWithAggregationInput = {
@@ -240,6 +243,7 @@ export type InfrastructureCreateInput = {
   layout: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
+  deployments?: Prisma.DeploymentCreateNestedManyWithoutInfrastructureInput
 }
 
 export type InfrastructureUncheckedCreateInput = {
@@ -249,6 +253,7 @@ export type InfrastructureUncheckedCreateInput = {
   layout: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   updatedAt?: Date | string
+  deployments?: Prisma.DeploymentUncheckedCreateNestedManyWithoutInfrastructureInput
 }
 
 export type InfrastructureUpdateInput = {
@@ -258,6 +263,7 @@ export type InfrastructureUpdateInput = {
   layout?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  deployments?: Prisma.DeploymentUpdateManyWithoutInfrastructureNestedInput
 }
 
 export type InfrastructureUncheckedUpdateInput = {
@@ -267,6 +273,7 @@ export type InfrastructureUncheckedUpdateInput = {
   layout?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  deployments?: Prisma.DeploymentUncheckedUpdateManyWithoutInfrastructureNestedInput
 }
 
 export type InfrastructureCreateManyInput = {
@@ -321,6 +328,11 @@ export type InfrastructureMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
+export type InfrastructureScalarRelationFilter = {
+  is?: Prisma.InfrastructureWhereInput
+  isNot?: Prisma.InfrastructureWhereInput
+}
+
 export type StringFieldUpdateOperationsInput = {
   set?: string
 }
@@ -329,6 +341,101 @@ export type DateTimeFieldUpdateOperationsInput = {
   set?: Date | string
 }
 
+export type InfrastructureCreateNestedOneWithoutDeploymentsInput = {
+  create?: Prisma.XOR<Prisma.InfrastructureCreateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedCreateWithoutDeploymentsInput>
+  connectOrCreate?: Prisma.InfrastructureCreateOrConnectWithoutDeploymentsInput
+  connect?: Prisma.InfrastructureWhereUniqueInput
+}
+
+export type InfrastructureUpdateOneRequiredWithoutDeploymentsNestedInput = {
+  create?: Prisma.XOR<Prisma.InfrastructureCreateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedCreateWithoutDeploymentsInput>
+  connectOrCreate?: Prisma.InfrastructureCreateOrConnectWithoutDeploymentsInput
+  upsert?: Prisma.InfrastructureUpsertWithoutDeploymentsInput
+  connect?: Prisma.InfrastructureWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.InfrastructureUpdateToOneWithWhereWithoutDeploymentsInput, Prisma.InfrastructureUpdateWithoutDeploymentsInput>, Prisma.InfrastructureUncheckedUpdateWithoutDeploymentsInput>
+}
+
+export type InfrastructureCreateWithoutDeploymentsInput = {
+  id?: string
+  userId?: string
+  name: string
+  layout: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type InfrastructureUncheckedCreateWithoutDeploymentsInput = {
+  id?: string
+  userId?: string
+  name: string
+  layout: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type InfrastructureCreateOrConnectWithoutDeploymentsInput = {
+  where: Prisma.InfrastructureWhereUniqueInput
+  create: Prisma.XOR<Prisma.InfrastructureCreateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedCreateWithoutDeploymentsInput>
+}
+
+export type InfrastructureUpsertWithoutDeploymentsInput = {
+  update: Prisma.XOR<Prisma.InfrastructureUpdateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedUpdateWithoutDeploymentsInput>
+  create: Prisma.XOR<Prisma.InfrastructureCreateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedCreateWithoutDeploymentsInput>
+  where?: Prisma.InfrastructureWhereInput
+}
+
+export type InfrastructureUpdateToOneWithWhereWithoutDeploymentsInput = {
+  where?: Prisma.InfrastructureWhereInput
+  data: Prisma.XOR<Prisma.InfrastructureUpdateWithoutDeploymentsInput, Prisma.InfrastructureUncheckedUpdateWithoutDeploymentsInput>
+}
+
+export type InfrastructureUpdateWithoutDeploymentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  layout?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type InfrastructureUncheckedUpdateWithoutDeploymentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  layout?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+
+/**
+ * Count Type InfrastructureCountOutputType
+ */
+
+export type InfrastructureCountOutputType = {
+  deployments: number
+}
+
+export type InfrastructureCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  deployments?: boolean | InfrastructureCountOutputTypeCountDeploymentsArgs
+}
+
+/**
+ * InfrastructureCountOutputType without action
+ */
+export type InfrastructureCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the InfrastructureCountOutputType
+   */
+  select?: Prisma.InfrastructureCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * InfrastructureCountOutputType without action
+ */
+export type InfrastructureCountOutputTypeCountDeploymentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.DeploymentWhereInput
+}
 
 
 export type InfrastructureSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -338,6 +445,8 @@ export type InfrastructureSelect<ExtArgs extends runtime.Types.Extensions.Intern
   layout?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  deployments?: boolean | Prisma.Infrastructure$deploymentsArgs<ExtArgs>
+  _count?: boolean | Prisma.InfrastructureCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["infrastructure"]>
 
 export type InfrastructureSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -368,10 +477,18 @@ export type InfrastructureSelectScalar = {
 }
 
 export type InfrastructureOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "name" | "layout" | "createdAt" | "updatedAt", ExtArgs["result"]["infrastructure"]>
+export type InfrastructureInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  deployments?: boolean | Prisma.Infrastructure$deploymentsArgs<ExtArgs>
+  _count?: boolean | Prisma.InfrastructureCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type InfrastructureIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type InfrastructureIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $InfrastructurePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Infrastructure"
-  objects: {}
+  objects: {
+    deployments: Prisma.$DeploymentPayload<ExtArgs>[]
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     userId: string
@@ -773,6 +890,7 @@ readonly fields: InfrastructureFieldRefs;
  */
 export interface Prisma__InfrastructureClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  deployments<T extends Prisma.Infrastructure$deploymentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Infrastructure$deploymentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeploymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -825,6 +943,10 @@ export type InfrastructureFindUniqueArgs<ExtArgs extends runtime.Types.Extension
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * Filter, which Infrastructure to fetch.
    */
   where: Prisma.InfrastructureWhereUniqueInput
@@ -843,6 +965,10 @@ export type InfrastructureFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Ex
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * Filter, which Infrastructure to fetch.
    */
   where: Prisma.InfrastructureWhereUniqueInput
@@ -860,6 +986,10 @@ export type InfrastructureFindFirstArgs<ExtArgs extends runtime.Types.Extensions
    * Omit specific fields from the Infrastructure
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
   /**
    * Filter, which Infrastructure to fetch.
    */
@@ -909,6 +1039,10 @@ export type InfrastructureFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Ext
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * Filter, which Infrastructure to fetch.
    */
   where?: Prisma.InfrastructureWhereInput
@@ -956,6 +1090,10 @@ export type InfrastructureFindManyArgs<ExtArgs extends runtime.Types.Extensions.
    * Omit specific fields from the Infrastructure
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
   /**
    * Filter, which Infrastructures to fetch.
    */
@@ -1005,6 +1143,10 @@ export type InfrastructureCreateArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * The data needed to create a Infrastructure.
    */
   data: Prisma.XOR<Prisma.InfrastructureCreateInput, Prisma.InfrastructureUncheckedCreateInput>
@@ -1052,6 +1194,10 @@ export type InfrastructureUpdateArgs<ExtArgs extends runtime.Types.Extensions.In
    * Omit specific fields from the Infrastructure
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
   /**
    * The data needed to update a Infrastructure.
    */
@@ -1119,6 +1265,10 @@ export type InfrastructureUpsertArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * The filter to search for the Infrastructure to update in case it exists.
    */
   where: Prisma.InfrastructureWhereUniqueInput
@@ -1145,6 +1295,10 @@ export type InfrastructureDeleteArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
+  /**
    * Filter which Infrastructure to delete.
    */
   where: Prisma.InfrastructureWhereUniqueInput
@@ -1165,6 +1319,30 @@ export type InfrastructureDeleteManyArgs<ExtArgs extends runtime.Types.Extension
 }
 
 /**
+ * Infrastructure.deployments
+ */
+export type Infrastructure$deploymentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Deployment
+   */
+  select?: Prisma.DeploymentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Deployment
+   */
+  omit?: Prisma.DeploymentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DeploymentInclude<ExtArgs> | null
+  where?: Prisma.DeploymentWhereInput
+  orderBy?: Prisma.DeploymentOrderByWithRelationInput | Prisma.DeploymentOrderByWithRelationInput[]
+  cursor?: Prisma.DeploymentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.DeploymentScalarFieldEnum | Prisma.DeploymentScalarFieldEnum[]
+}
+
+/**
  * Infrastructure without action
  */
 export type InfrastructureDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1176,4 +1354,8 @@ export type InfrastructureDefaultArgs<ExtArgs extends runtime.Types.Extensions.I
    * Omit specific fields from the Infrastructure
    */
   omit?: Prisma.InfrastructureOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InfrastructureInclude<ExtArgs> | null
 }

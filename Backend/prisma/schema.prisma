@@ -9,11 +9,38 @@ datasource db {
 
 
 model Infrastructure {
-  id             String        @id                @default(uuid())
-  userId         String                           @default("test-user")
-  name           String
-  layout         Json
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                    String        @id           @default(uuid())
+  userId                String                      @default("test-user")
+  name                  String
+  layout                Json
+  deployments           Deployment[] // One infrastructure has many deployments
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
 }
 
+model Deployment {
+  id                    String           @id        @default(uuid())
+  infrastructureId      String
+  infrastructure        Infrastructure   @relation(fields: [infrastructureId], references: [id], onDelete: Cascade) // Belongs to one infrastructure
+  status                String                      @default("pending") // pending, running completed failed
+  resourceCount         Int                         @default(0) // How many resources in this deployment
+  stages                Json                        @default("[]") // Array of { timestamp, event, message }
+  timeline              Json                        @default("[]") // Array of { timestamp, event, message }
+  chaosEvents           Json                        @default("[]") // Chaos injectiosn during deployment
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+}
+
+// Basically as schema to keep track the atomicity of deployment. That either added to database and queue both or none.
+model Outbox {
+  id                    String           @id        @default(uuid())
+  eventType             String
+  payload               Json
+  status                String                      @default("pending") // pending -> processing -> completed -> failed
+  retries               Int                         @default(0) // retries already done
+  // NOTE: worker.ts poller hardcodes retries < 4. Keep in sync if changing make changes at both places.
+  maxRetries            Int                         @default(4) // max allowed retries 
+  processedAt           DateTime?
+  error                 String?
+  createdAt             DateTime                    @default(now())
+}

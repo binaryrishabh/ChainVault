@@ -14,7 +14,7 @@ export const publishDeploymentUpdate = async(deploymentId: string, stage: string
 
 
 // this is to where all websocket servers are listening to and listens when there deploymentId matches or the client that's wanting the deploymentId matches
-export const subscribeDeployment = async(deploymentId: string, callback: (event: any) => void) => { // this callback function is passed by the websocket server
+export const subscribeToDeployment = async(deploymentId: string, callback: (event: any) => void) => { // this callback function is passed by the websocket server
   const subscriber = redis.duplicate(); // we are creating a new redis connection. Here redis connection by subscriber can only subscribe they won't be allowed to do any thing else that's ahy making new redis connection for each subscriptions. This is scaling so that subscribers don't block the publishing queing and chaching things server.
   
   await subscriber.subscribe(`deployment:${deploymentId}:updates`); // shouts for specific deploymentId and websocket subscribes to the particular one can listen.

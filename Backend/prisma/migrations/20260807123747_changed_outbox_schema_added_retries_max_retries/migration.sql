@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Outbox" ADD COLUMN     "maxRetries" INTEGER NOT NULL DEFAULT 4,
+ADD COLUMN     "retries" INTEGER NOT NULL DEFAULT 0;

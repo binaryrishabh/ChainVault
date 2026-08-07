@@ -22,3 +22,13 @@ export * from './enums.ts';
  * 
  */
 export type Infrastructure = Prisma.InfrastructureModel
+/**
+ * Model Deployment
+ * 
+ */
+export type Deployment = Prisma.DeploymentModel
+/**
+ * Model Outbox
+ * 
+ */
+export type Outbox = Prisma.OutboxModel
