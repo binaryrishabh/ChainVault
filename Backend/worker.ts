@@ -2,30 +2,31 @@ import { Worker } from "bullmq";
 import { redis } from "./infra/redis";
 import { prisma } from "./lib/prisma";
 import { deploymentQueue } from "./infra/queue";
-import { publishDeploymentUpdate } from "./infra/pubsub";
+import { publishDeploymentCompleted, publishDeploymentFailed, publishDeploymentStarted, publishOutboxFailed, publishStageCompleted } from "./infra/pubsub";
+import { OUTBOX_BullMQ_STATUS, DEPLOYMENT_STATUS, DEPLOYMENT_STAGES, PUBLISH_TYPE } from "../shared/constants";
 
 // Outbox processor-> Polls the unprocessed events from outbox table every 5 seconds and adds to BullMQ.
 // This is because we have implemented the atomicity in the /api/deployments api end-point code.
 // This is polling to the database server every 5 seconds. But at production shift to switch to CDC with Debezium and Kafka.
+
+await new Promise(r => setTimeout(r, 5000));
+
 setInterval( async() => {
   try {
     const unprocessed = await prisma.outbox.findMany({
       where: {
-        status: "pending", // Only filter out pending.. Failed will never be retried
+        status: OUTBOX_BullMQ_STATUS.PENDING, // Only filter out pending.. Failed will never be retried
         // NOTE: maxRetries in Outbox model is 4. This lt: 4 must match.
         // If you change one, change both, the other in Oubox schema.
         retries: {
           lt: 4
         }
       },
-      orderBy: [
-        {
+      orderBy: [{
           retries: "asc"  // Pick retries with fewest retries first
-        },
-        {
+        }, {
           createdAt: "asc" // Pick them with oldest first
-        }
-      ],
+      }],
       take: 10 // picks 10 at max from the find list every 5 seconds
     });
 
@@ -37,7 +38,7 @@ setInterval( async() => {
           id: entry.id // Here it is outbox id
         },
         data: {
-          status: "processing"
+          status: OUTBOX_BullMQ_STATUS.PROCESSING
         }
       })
       
@@ -56,7 +57,7 @@ setInterval( async() => {
             id: entry.id
           },
           data: {
-            status: "completed",
+            status: OUTBOX_BullMQ_STATUS.COMPLETED,
             processedAt: new Date()
           }
         })
@@ -77,7 +78,7 @@ setInterval( async() => {
             id: entry.id // This the outbox id
           },
           data: {
-            status: isFailed ? "failed" : "pending",
+            status: isFailed ? OUTBOX_BullMQ_STATUS.FAILED : OUTBOX_BullMQ_STATUS.PENDING,
             retries: newRetries,
             error: err.message
           }
@@ -90,30 +91,31 @@ setInterval( async() => {
               id: (entry.payload as any).deploymentId
             },
             data: {
-              status: "failed"
+              status: DEPLOYMENT_STATUS.FAILED
             }
           })
 
-          await publishDeploymentUpdate(
+          // Publish that current deployemt couldn't be inserted into queue. and retries also exhausted.
+          await publishOutboxFailed(
             (entry.payload as any).deploymentId,
-            "failed",
-            "failed",
-            "Deployment failed: outbox processing exhausted retries the max limit was 4"
+            "BullMQ failed to push the service."
           );
 
-          console.error(`Outbox ${entry.id} ${isFailed ? "permanently failed" : "will retry"}: ${err.message}`);
+          console.error(`Outbox: ${entry.id} with deploymentId: ${(entry.payload as any).deploymentId} permanently failed: ${err.message}`);
         }
         else {
-          console.error(`Outbox ${entry.id} will retry (${newRetries}/${entry.maxRetries}): ${err.message}`);
+          console.error(`Outbox ${entry.id} with deploymentId: ${(entry.payload as any).deploymentId} will retry (${newRetries}/${entry.maxRetries} times max): ${err.message}`);
         }
       }
     }
   }
-  catch (err) {
+  catch (err: any) {
     // errors are logged not thrown so that queue processor keeps running
-    console.error("Outbox queue processor error: ", err);
+    console.error(`Outbox queue processor error: ${err.message}`);
   }
 }, 5000)
+
+
 
 const worker = new Worker (
   "deployments", // Watches the "deploymets" queue
@@ -128,26 +130,19 @@ const worker = new Worker (
           id: deploymentId,
         },
         data: {
-          status: "running"
+          status: DEPLOYMENT_STATUS.RUNNING
         }
       });
 
-      await publishDeploymentUpdate( deploymentId, "started", "running", `Deployment started with ${resources.length} resources`);
+      // Publish as current deployment has started running
+      await publishDeploymentStarted(deploymentId, resources.length);
+      console.log(`Deployment started ${deploymentId}`);
 
-      // 2. Define the 7 stages
-      const stages = [
-        "Validate",
-        "Provision",
-        "Configure",
-        "Orchestrate",
-        "HealthCheck",
-        "MonitorSetup",
-        "Ready"
-      ];
-
-      // 3. Process each stage
-      for(const stage of stages) {
+      
+      // 2. Process each stage
+      for(const stage of DEPLOYMENT_STAGES) { // DEPLOYMENT_STAGES This is from the global shared constants file
         // Simulate work
+
         const startedAt = new Date().toISOString();
         
         await new Promise(waitHere => setTimeout(waitHere, 2000)); // Wait here for 2 seconds between each stage
@@ -161,6 +156,7 @@ const worker = new Worker (
 
         // Add stage entry for current stage which will get updated to db finally
         const currentStages = (deployment?.stages as any[]) || [];
+
         currentStages.push({
           name: stage,
           status: "completed",
@@ -189,25 +185,26 @@ const worker = new Worker (
           }
         });
 
-        // Public real-time event
-        await publishDeploymentUpdate( deploymentId, stage, "completed", `${stage} completed successfully`)
+        // Publish as current stage is completed.
+        await publishStageCompleted(deploymentId, stage, resources.length);
 
         console.log(`${stage} completed for deployment id: ${deploymentId}`);
       }
-      
-      // 4. Mark as completed
+
+      // 3. Mark as completed
       // Update the status in the db as completed for this deployment
       await prisma.deployment.update({
         where: {
           id: deploymentId
         },
         data: {
-          status: "completed"
+          status: DEPLOYMENT_STATUS.COMPLETED
         }
       });
 
       // broadcasts to Redis pub/sub. Websocket server will forward it to frontend.
-      await publishDeploymentUpdate( deploymentId, "finished", "completed", `All stages is completed infrastructure is ready`);
+      // Publish that current deployment finished and completed
+      await publishDeploymentCompleted( deploymentId );
 
       console.log(`Deployment completed ${deploymentId}`);
     }
@@ -217,11 +214,12 @@ const worker = new Worker (
           id: deploymentId
         },
         data: {
-          status: "failed"
+          status: DEPLOYMENT_STATUS.FAILED
         }
       });
 
-      await publishDeploymentUpdate( deploymentId, "failed", "failed", `Deployment failed: ${err.message}`)
+      // Publish that current deployment failed....
+      await publishDeploymentFailed( deploymentId, `Deployment failed at some stage due to: ${err.message}`);
     }
   },
   { 

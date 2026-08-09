@@ -37,7 +37,7 @@ wss.on("connection", (socket) => {
 
   socket.on("close", () => {
     console.log("Client disconnected");
-    // Redis subscriptions auto cleanup when connection closes because subscriber.quit() isn not called. Will fix later.
+    // Redis subscriptions auto cleanup when connection closes because subscriber.quit() is not called. Will fix later.
   })
 });
 
