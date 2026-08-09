@@ -9,23 +9,27 @@ interface TopbarProps {
   handleSelectLayout: (infrastructure: Infrastructure) => void,
   currentLayoutId: string | null,
   currentLayoutName: string | null,
+  currentLayoutSaved: boolean,
   handleNew: () => void,
   handleSave: () => void,
   handleUpdate: () => void,
+  handleDeploy: () => void,
   handleDelete: () => void
 }
 
 export function Topbar({ 
-    showLayoutDropdown, 
-    savedLayouts, 
-    handleOpenCloseDropDownNameClick, 
-    handleSelectLayout, 
+    showLayoutDropdown,
+    savedLayouts,
+    handleOpenCloseDropDownNameClick,
+    handleSelectLayout,
     currentLayoutId,
-    currentLayoutName, 
-    handleNew, 
-    handleSave, 
-    handleUpdate, 
-    handleDelete 
+    currentLayoutName,
+    currentLayoutSaved,
+    handleNew,
+    handleSave,
+    handleUpdate,
+    handleDeploy,
+    handleDelete
   }: TopbarProps) {
 
   return (
@@ -46,11 +50,14 @@ export function Topbar({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <TopbarButton icon="✨" label="New" variant="new" onclick={ handleNew } />
+        <TopbarButton icon="✨" label="New" variant="new" onclick={  handleNew } />
         {currentLayoutId ?
-          <TopbarButton icon="📝" label="Update" variant="update" onclick={ handleUpdate } />
+          <TopbarButton icon="📝" label="Update" variant="update" onclick={ currentLayoutSaved ? undefined : handleUpdate } />
           :
-          <TopbarButton icon="💾" label="Save" variant="save" onclick={ handleSave } />
+          <TopbarButton icon="💾" label="Save" variant="save" onclick={ handleSave }  />
+        }
+        {currentLayoutId &&
+          <TopbarButton  icon="🚀" label="deploy" variant="deploy" onclick={ handleDeploy } />
         }
         <TopbarButton icon="X" label="Delete Infrastructure" variant="delete" onclick={ handleDelete } />
       </div>
