@@ -7,7 +7,6 @@ import { createDeployment, createInfrastructure, deleteInfrastructure, getAllInf
 import { DeploymentPipeline } from "../DeploymentView/DeploymentPipeline";
 import { type Infrastructure } from "../../Types/Infrastructure.types";
 
-
 export function DndContextComponent() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -21,7 +20,7 @@ export function DndContextComponent() {
 
   const [activeDrag, setActiveDrag] = useState<{ emoji: string, label: string } | null>(null);
 
-  const [canvasItems, setCanvasItems] = useState<Array<{id: string, type: string, emoji: string, x: number, y: number}>>([]);
+  const [canvasResources, setCanvasResources] = useState<Array<{id: string, type: string, emoji: string, x: number, y: number}>>([]);
 
   // states about current state of layout on canvas
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
@@ -32,9 +31,14 @@ export function DndContextComponent() {
   const [showLayoutDropdown, setShowLayoutDropdown] = useState<boolean>(false);
   const [savedLayouts, setSavedLayouts] = useState<Infrastructure[]>([]);
 
-  // set the deploymet status when deploy button is clicked i.e. the handleDeploy handler below.
+  // set the deployment status when deploy button is clicked i.e. the handleDeploy handler below.
   const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
+
+  // state of connection lines/grids between the resources on canvas...
+  const [connections, setConnections] = useState<Array<{id: string, sourceId: string, targetId: string, sourceType: string, targetType: string, port: number }>>([]);
+  const [selectedResource, setSelectedResource] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
   /* ------Save the current state of canvas icons into localstorage prevents vanish on reloads----- */
   // state tracking for we have initialized the current state from localstorage or not
@@ -46,7 +50,7 @@ export function DndContextComponent() {
     const infra = localStorage.getItem("Infraforge_Infrastucture_Draft");
     if (infra) {
       const parsed = JSON.parse(infra);
-      setCanvasItems(parsed.canvasItems);
+      setCanvasResources(parsed.canvasResources);
       setCurrentLayoutId(parsed.currentLayoutId);
       setCurrentLayoutName(parsed.currentLayoutName);
       setCurrentLayoutSaved(parsed.saved);
@@ -59,12 +63,12 @@ export function DndContextComponent() {
     if (!isInitialized) return; // ← Skip on first render
     
     localStorage.setItem("Infraforge_Infrastucture_Draft", JSON.stringify({
-      canvasItems,
+      canvasResources,
       currentLayoutId,
       currentLayoutName,
       saved: currentLayoutSaved
     }));
-  }, [canvasItems, currentLayoutId, currentLayoutName, currentLayoutSaved]);
+  }, [canvasResources, currentLayoutId, currentLayoutName, currentLayoutSaved]);
 
   /* ----------------------Topbar dropdown------------------- */
   // fetch infrastructure to fill dropdown
@@ -79,7 +83,7 @@ export function DndContextComponent() {
       }
     }
     fetchInfrastructures();
-  }, [currentLayoutSaved, canvasItems])
+  }, [currentLayoutSaved, canvasResources])
 
   // Handle open close of infrastructure dropdown button
   const handleOpenCloseDropDownNameClick = async() => {
@@ -95,11 +99,13 @@ export function DndContextComponent() {
 
     setCurrentLayoutId(infrastructure.id);
     setCurrentLayoutName(infrastructure.name);
-    setCanvasItems(infrastructure.layout.icons || []);
+    setCanvasResources(infrastructure.layout.icons || []);
     setCurrentLayoutSaved(true);
     setShowLayoutDropdown(false);
     setActiveDeploymentId(null);
     setIsDeploying(false);
+    setConnections([]);
+    setSelectedResource(null);
   }
 
   // close dropdown by clicking anywhere except the dropdown itself
@@ -133,12 +139,14 @@ export function DndContextComponent() {
       if(!discard) return;
     }
     
-    setCanvasItems([]);
+    setCanvasResources([]);
     setCurrentLayoutId(null);
     setCurrentLayoutName(null);
     setCurrentLayoutSaved(true);
     setActiveDeploymentId(null);
     setIsDeploying(false);
+    setConnections([]);
+    setSelectedResource(null);
     localStorage.removeItem("Infraforge_Infrastucture_Draft");
   }
 
@@ -149,8 +157,8 @@ export function DndContextComponent() {
       return;
     }
 
-    if(canvasItems.length === 0) {
-      alert("No items on the canvas");
+    if(canvasResources.length === 0) {
+      alert("No resources on the canvas");
       return;
     }
     const name = window.prompt("Enter layout name:")?.trim();
@@ -159,7 +167,7 @@ export function DndContextComponent() {
       return;
     }
     try {
-      const createdInfrastructure = await createInfrastructure(name, { icons: canvasItems });
+      const createdInfrastructure = await createInfrastructure(name, { icons: canvasResources });
       setCurrentLayoutId(createdInfrastructure.id);
       setCurrentLayoutName(createdInfrastructure.name);
       setCurrentLayoutSaved(true);
@@ -187,8 +195,8 @@ export function DndContextComponent() {
       return;
     }
     const name = window.prompt("Update layout name:", currentLayoutName)?.trim();
-    if(canvasItems.length === 0) {
-      alert("No items on the canvas");
+    if(canvasResources.length === 0) {
+      alert("No resources on the canvas");
       return;
     }
     if(!name) {
@@ -199,7 +207,7 @@ export function DndContextComponent() {
     try {
       const updatedInfrastructure = await updateInfrastructure(currentLayoutId, { 
         name, 
-        layout: { icons: canvasItems }
+        layout: { icons: canvasResources }
       });
       setCurrentLayoutName(name);
       setCurrentLayoutSaved(true);
@@ -239,11 +247,13 @@ export function DndContextComponent() {
       const deletedInfrastructure = await deleteInfrastructure(currentLayoutId);
       setCurrentLayoutId(null);
       setCurrentLayoutName(null);
-      setCanvasItems([]);
+      setCanvasResources([]);
       setCurrentLayoutSaved(true);
       setIsInitialized(false);
       setActiveDeploymentId(null);
       setIsDeploying(false);
+      setConnections([]);
+      setSelectedResource(null);
 
       localStorage.removeItem("Infraforge_Infrastucture_Draft");
       console.log("deleted: "+ deletedInfrastructure); 
@@ -267,7 +277,7 @@ export function DndContextComponent() {
       return;
     }
 
-    if(canvasItems.length === 0 && !savedLayouts) {
+    if(canvasResources.length === 0 && !savedLayouts) {
       alert("Add resources to the canvas before deploying.");
       return;
     }
@@ -292,21 +302,73 @@ export function DndContextComponent() {
     }
   }
 
-  /* ----------------------Canvas Icons------------------ */
-  const handleDeleteCanvasItem = (itemId: string) => {
+  /* ----------------------Canvas Resources------------------ */
+  const handleDeleteCanvasResource = (resourceId: string) => {
     if(isDeploying) {
       return; // Deployment already in process
     }
     setActiveDeploymentId(null);
     setIsDeploying(false);
-    setCanvasItems(prev => {
-      const updtatedItems = prev.filter(item => item.id !== itemId);
-      if(updtatedItems.length === 0) {
+    setCanvasResources(prev => {
+      const updtatedResources = prev.filter(resource => resource.id !== resourceId);
+      if(updtatedResources.length === 0) {
         setCurrentLayoutSaved(true);  
       }
-      return updtatedItems;
+      return updtatedResources;
     })
     setCurrentLayoutSaved(false);
+  }
+
+  /* ----------------------CONNECTION LINES BETWEEN RESOURCES ON CANVAS------------------ */
+  const getDefaultPortOfResources = (type: string): number => {
+    const ports: Record<string, number> = {
+      "CDN": 443,
+      "Load Balancer": 80,
+      "Virtual Machine": 22,
+      "Database": 5432,
+      "Cache": 6379,
+      "Message Queue": 5672,
+      "DNS": 53,
+      "Monitoring Agent": 9090,
+      "Container Registry": 443,
+      "Firewall": 0,
+      "Object Storage": 0
+    }
+
+    return ports[type] || 80; // default as 80
+  }
+
+  const hanldeResouceClick = (resourceId: string, resourceType: string) => {
+    if(!isConnecting) {
+      return;
+    }
+
+    if(!selectedResource) {
+      setSelectedResource(resourceId);
+    }
+    else if(selectedResource === resourceId) { // making connection with the resource itself
+      setSelectedResource(null); // Deselect
+    }
+    else { // create connection
+      const sourceItem = canvasResources.find(resource => resource.id === selectedResource);
+      if(sourceItem) {
+        const port = getDefaultPortOfResources(sourceItem.type);
+        setConnections(prev => [...prev, {
+          id: `connection-${Date.now()}`,
+          sourceId: selectedResource,
+          targetId: resourceId,
+          sourceType: sourceItem.type,
+          targetType: resourceType,
+          port
+        }])
+      }
+      setSelectedResource(null);
+    }
+  }
+
+  const handleToggleConnectionLines = () => {
+    setIsConnecting(!isConnecting);
+    setSelectedResource(null);
   }
 
   return (
@@ -325,8 +387,8 @@ export function DndContextComponent() {
 
         
         if(event.over?.id === "canvas") {
-          setCurrentLayoutSaved(false); // tracking there was a new item added to the canvas
-          setIsInitialized(true); // saving to localstorage there was a new item added to the canvas
+          setCurrentLayoutSaved(false); // tracking there was a new resource added to the canvas
+          setIsInitialized(true); // saving to localstorage there was a new resource added to the canvas
 
           const { active, delta } = event;
           const emoji = active.data.current?.emoji || "🖥";
@@ -353,8 +415,8 @@ export function DndContextComponent() {
             y = Math.round(y / GRID_SIZE) * GRID_SIZE;
           }
 
-          const isOverlapping = canvasItems.some(
-            (item) => Math.abs(item.x - x) < 40 && Math.abs(item.y - y) < 40
+          const isOverlapping = canvasResources.some(
+            (resource) => Math.abs(resource.x - x) < 40 && Math.abs(resource.y - y) < 40
           )
 
           if(isOverlapping) {
@@ -364,7 +426,7 @@ export function DndContextComponent() {
           
           console.log("Drag ended:", event.active.id, event.over?.id, x, y);
 
-          setCanvasItems((prev) => [
+          setCanvasResources((prev) => [
             ...prev,
             {
               id: `${active.id}-${Date.now()}`,
@@ -400,13 +462,22 @@ export function DndContextComponent() {
           handleUpdate={handleUpdate} 
           handleDeploy={handleDeploy}
           handleDelete={handleDelete}
+          isConnecting={isConnecting}
+          handleToggleConnectionLines={handleToggleConnectionLines}
         />
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar */}
           <Sidebar />
 
           {/* Canvas */}
-          <Canvas items={ canvasItems } onDeleteItem={handleDeleteCanvasItem} />
+          <Canvas 
+            resources={ canvasResources } 
+            onDeleteResource={handleDeleteCanvasResource} 
+            onResourceClick={hanldeResouceClick}
+            connections={connections}
+            selectedResource={selectedResource}
+            isConnecting={isConnecting}
+          />
         </div>
       </div>
       

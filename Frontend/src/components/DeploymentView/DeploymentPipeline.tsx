@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DEPLOYMENT_STAGES, PUBLISH_TYPE } from "../../../../shared/constants"; // This is from the global shared constants file
+import { DEPLOYMENT_STAGES, PUBLISH } from "../../../../shared/constants"; // This is from the global shared constants file
 
 interface DeploymentPipelineProps {
   deploymentId: string;
@@ -31,24 +31,24 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
         setTimeline(prev => [...prev, { message: data.message, timestamp: data.timestamp }]);
 
         switch(data.type) {
-          case PUBLISH_TYPE.publishOutboxFailed:
+          case PUBLISH.publishOutboxFailed:
             setStatus("failed")
             break;
 
-          case PUBLISH_TYPE.publishDeploymentStarted:
+          case PUBLISH.publishDeploymentStarted:
             setStatus("running");
             break;
 
-          case PUBLISH_TYPE.publishStageCompleted:
+          case PUBLISH.publishStageCompleted:
             setCompletedStages(prev => [...prev, data.stageName]);
             break;
 
-          case PUBLISH_TYPE.publishDeploymentCompleted:
+          case PUBLISH.publishDeploymentCompleted:
             setStatus("completed");
             onDeploymentComplete();
             break;
           
-          case PUBLISH_TYPE.publishDeploymentFailed:
+          case PUBLISH.publishDeploymentFailed:
             setStatus("failed");
             onDeploymentFailed();
             break;

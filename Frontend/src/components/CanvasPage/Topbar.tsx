@@ -1,6 +1,6 @@
 import { type Infrastructure } from "../../Types/Infrastructure.types";
 import { DropdownLayoutButton } from "./DropdownLayoutButton";
-import { TopbarButton } from "./TopbarButtons";
+import { TopbarButton } from "./TopbarButton";
 
 interface TopbarProps {
   showLayoutDropdown: boolean,
@@ -14,7 +14,9 @@ interface TopbarProps {
   handleSave: () => void,
   handleUpdate: () => void,
   handleDeploy: () => void,
-  handleDelete: () => void
+  handleDelete: () => void,
+  isConnecting: boolean,
+  handleToggleConnectionLines: () => void
 }
 
 export function Topbar({ 
@@ -29,7 +31,9 @@ export function Topbar({
     handleSave,
     handleUpdate,
     handleDeploy,
-    handleDelete
+    handleDelete,
+    isConnecting,
+    handleToggleConnectionLines
   }: TopbarProps) {
 
   return (
@@ -60,6 +64,7 @@ export function Topbar({
           <TopbarButton  icon="🚀" label="deploy" variant="deploy" onclick={ handleDeploy } />
         }
         <TopbarButton icon="X" label="Delete Infrastructure" variant="delete" onclick={ handleDelete } />
+        <TopbarButton icon="🔗" label={isConnecting ? "Connecting..." : "Connect"} variant={isConnecting ? "deploy" : "default"} onclick={handleToggleConnectionLines} />
       </div>
     </div>
   )
