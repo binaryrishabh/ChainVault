@@ -10,7 +10,6 @@ import { config } from "./utils/config";
 import { rateLimiter } from "./utils/rateLimiter";
 import { deploymentQueue } from "./infra/queue";
 
-
 app.use(rateLimiter);
 app.use(cors());
 app.use(express.json());

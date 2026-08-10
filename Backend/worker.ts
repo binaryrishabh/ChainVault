@@ -3,7 +3,10 @@ import { redis } from "./infra/redis";
 import { prisma } from "./lib/prisma";
 import { deploymentQueue } from "./infra/queue";
 import { publishDeploymentCompleted, publishDeploymentFailed, publishDeploymentStarted, publishOutboxFailed, publishStageCompleted } from "./infra/pubsub";
-import { OUTBOX_BullMQ_STATUS, DEPLOYMENT_STATUS, DEPLOYMENT_STAGES, PUBLISH_TYPE } from "../shared/constants";
+import { OUTBOX_BullMQ_STATUS, DEPLOYMENT_STATUS, DEPLOYMENT_STAGES } from "../shared/constants";
+import type { DeploymentJob } from "../shared/types";
+import { runSecurityScan } from "./stages/securityScan.stages"
+import { runCostEstimation } from "./stages/costEstimation.stages"
 
 // Outbox processor-> Polls the unprocessed events from outbox table every 5 seconds and adds to BullMQ.
 // This is because we have implemented the atomicity in the /api/deployments api end-point code.
@@ -121,7 +124,7 @@ const worker = new Worker (
   "deployments", // Watches the "deploymets" queue
   async (job) => { // This function runs for every job
     // The 7 stage will go here
-    const { deploymentId, resources } = job.data;
+    const { deploymentId, resources } = job.data as DeploymentJob;
 
     try {
       // 1. Mark as running
@@ -142,6 +145,20 @@ const worker = new Worker (
       // 2. Process each stage
       for(const stage of DEPLOYMENT_STAGES) { // DEPLOYMENT_STAGES This is from the global shared constants file
         // Simulate work
+        let stateMessage = "";
+
+        switch(stage) {
+          case "SecurityScan":
+            const securityResult = runSecurityScan(resources);
+            stateMessage = securityResult.summary;
+            break;
+          case "CostEstimate":
+            const costResult = runCostEstimation(resources);
+            stateMessage = costResult.summary;
+            break;
+          default:
+            stateMessage = `${stage} completed for ${resources.length} resources`;  
+        }
 
         const startedAt = new Date().toISOString();
         
@@ -162,7 +179,7 @@ const worker = new Worker (
           status: "completed",
           startedAt,
           completedAt: new Date().toISOString(),
-          message: `${stage} completed for ${resources.length} resources`
+          message: stateMessage
         });
 
         // Add timeline entry for current stage which will get updated to db finally
@@ -170,7 +187,7 @@ const worker = new Worker (
         currentTimeline.push({
           timestamp: new Date().toISOString(),
           event: stage,
-          message: `${stage} stage completed successfully`
+          message: stateMessage
         });
 
         // Update DB
@@ -186,7 +203,7 @@ const worker = new Worker (
         });
 
         // Publish as current stage is completed.
-        await publishStageCompleted(deploymentId, stage, resources.length);
+        await publishStageCompleted(deploymentId, stage, resources.length, stateMessage);
 
         console.log(`${stage} completed for deployment id: ${deploymentId}`);
       }

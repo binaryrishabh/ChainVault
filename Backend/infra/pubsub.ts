@@ -1,5 +1,5 @@
 import { redis } from "./redis";
-import { PUBLISH_TYPE } from "../../shared/constants";
+import { PUBLISH } from "../../shared/constants";
 
 /* ------------------------Publisher code--------------------- */
 // These are publishers that the worker and outbox will call so that the client could be informed through web socket that what is going on behind at each step through subscribers.....
@@ -8,7 +8,7 @@ import { PUBLISH_TYPE } from "../../shared/constants";
 export const publishOutboxFailed = async (deploymentId: string, reason: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH_TYPE.publishOutboxFailed,
+    type: PUBLISH.publishOutboxFailed,
     message: reason,
     timestamp: new Date().toISOString()
   }))
@@ -18,7 +18,7 @@ export const publishOutboxFailed = async (deploymentId: string, reason: string) 
 export const publishDeploymentStarted = async(deploymentId: string, resourceCount: number) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH_TYPE.publishDeploymentStarted,
+    type: PUBLISH.publishDeploymentStarted,
     status: "running",
     resourceCount,
     message: `Deployment started with ${resourceCount} resources`,
@@ -28,12 +28,12 @@ export const publishDeploymentStarted = async(deploymentId: string, resourceCoun
 
 
 // 3. A stage of a particular deployment completed
-export const publishStageCompleted = async (deploymentId: string, stageName: string, resourceCount: number) => {
+export const publishStageCompleted = async (deploymentId: string, stageName: string, resourceCount: number, stateMessage: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH_TYPE.publishStageCompleted,
+    type: PUBLISH.publishStageCompleted,
     stageName,
-    message: `${stageName} completed for ${resourceCount} resources`,
+    message: stateMessage,
     timestamp: new Date().toISOString()
   }))
 }
@@ -43,7 +43,7 @@ export const publishStageCompleted = async (deploymentId: string, stageName: str
 export const publishDeploymentCompleted = async(deploymentId: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH_TYPE.publishDeploymentCompleted,
+    type: PUBLISH.publishDeploymentCompleted,
     status: "completed",
     message: "All stages completed. Infrastructure is ready.",
     timestamp: new Date().toISOString()
@@ -55,7 +55,7 @@ export const publishDeploymentCompleted = async(deploymentId: string) => {
 export const publishDeploymentFailed = async(deploymentId: string, reason: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH_TYPE.publishDeploymentFailed,
+    type: PUBLISH.publishDeploymentFailed,
     status: "failed",
     message: reason,
     timestamp: new Date().toISOString()
