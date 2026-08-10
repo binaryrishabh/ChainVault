@@ -4,13 +4,15 @@ export const DEPLOYMENT_STAGES = [
   "Configure",
   "Orchestrate",
   "HealthCheck",
+  "SecurityScan",
+  "CostEstimate",
   "MonitorSetup",
   "Ready"
 ] as const; // This tells to typescript that this array is readOnly and vakue are exact literals not just string[]. Without as const, the type is string[]. With it, the type is readonly ["Validate", "Provision", "Configure"].
 
-export type DeploymentStage = (typeof DEPLOYMENT_STAGES)[number];
+export type DeploymentStageType = (typeof DEPLOYMENT_STAGES)[number];
 
-export enum PUBLISH_TYPE {
+export enum PUBLISH {
   publishOutboxFailed = "outbox-BullMQ-push-failed",
   publishDeploymentStarted = "deployment-started",
   publishStageCompleted = "stage-of-deployment-completed",
@@ -18,7 +20,7 @@ export enum PUBLISH_TYPE {
   publishDeploymentFailed = "deployment-failed"
 }
 
-export type PUBLISHTYPE = typeof PUBLISH_TYPE;
+export type PUBLISH_TYPE = typeof PUBLISH;
 
 export enum DEPLOYMENT_STATUS {
   PENDING = "pending",
@@ -27,7 +29,7 @@ export enum DEPLOYMENT_STATUS {
   FAILED = "failed"
 }
 
-export type DEPLOYMENTSTAGES = typeof DEPLOYMENT_STATUS;
+export type DEPLOYMENT_STATUS_TYPE = typeof DEPLOYMENT_STATUS;
 
 export enum OUTBOX_BullMQ_STATUS {
   PENDING = "pending",
@@ -36,4 +38,4 @@ export enum OUTBOX_BullMQ_STATUS {
   FAILED = "failed"
 }
 
-export type OUTBOXBullMQSTATUS = typeof OUTBOX_BullMQ_STATUS;
+export type OUTBOX_BullMQ_STATUS_TYPE = typeof OUTBOX_BullMQ_STATUS;
