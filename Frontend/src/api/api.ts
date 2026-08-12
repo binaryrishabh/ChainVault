@@ -2,8 +2,8 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000/api";
 
-import type { Infrastructure } from "../Types/Infrastructure.types";
-import type { Deployment } from "../Types/deployment.types";
+import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
+import type { Deployment } from "@/frontendTypes/Deployment.types";
 
 /* ------------------Infrastructure api calls--------------- */
 export const getAllInfrastructure = async(): Promise<Infrastructure[]> => {  

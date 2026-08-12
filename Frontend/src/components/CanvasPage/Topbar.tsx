@@ -1,4 +1,4 @@
-import { type Infrastructure } from "../../Types/Infrastructure.types";
+import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
 import { DropdownLayoutButton } from "./DropdownLayoutButton";
 import { TopbarButton } from "./TopbarButton";
 
@@ -40,7 +40,7 @@ export function Topbar({
     <div className="h-12 bg-gray-950 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
       {/* Logo */}
       <span className="text-sm font-semibold tracking-wide text-gray-200 select-none">
-        ⚡ InfraForge 
+        ⚡ InfraForge
         {/* Below is the dropdown button code to select particular layout */}
         { <DropdownLayoutButton
           currentLayoutId={ currentLayoutId }

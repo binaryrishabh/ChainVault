@@ -3,9 +3,15 @@ import { useEffect, useState } from "react";
 import { Canvas } from "./Canvas";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
-import { createDeployment, createInfrastructure, deleteInfrastructure, getAllInfrastructure, updateInfrastructure } from "../../api/api";
+import { createDeployment, createInfrastructure, deleteInfrastructure, getAllInfrastructure, updateInfrastructure } from "@/api/api";
 import { DeploymentPipeline } from "../DeploymentView/DeploymentPipeline";
-import { type Infrastructure } from "../../Types/Infrastructure.types";
+import { ConfigPanelOfCanvasResource } from "./ConfigPanelOfCanvasResource";
+import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
+import type { ConnectionLine } from "@shared/types/ConnectionLine.types";
+import { RESOURCE_PORTS } from "@shared/constants/RESOURCE_PORTS.constants";
+import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants"
+import type { Resource } from "@shared/types/Resource.types";
+import { validateConnection } from "@shared/validateConnectionRules";
 
 export function DndContextComponent() {
   const sensors = useSensors(
@@ -20,7 +26,7 @@ export function DndContextComponent() {
 
   const [activeDrag, setActiveDrag] = useState<{ emoji: string, label: string } | null>(null);
 
-  const [canvasResources, setCanvasResources] = useState<Array<{id: string, type: string, emoji: string, x: number, y: number}>>([]);
+  const [canvasResources, setCanvasResources] = useState<Array<Resource>>([]);
 
   // states about current state of layout on canvas
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
@@ -29,18 +35,21 @@ export function DndContextComponent() {
 
   // states about dropdown
   const [showLayoutDropdown, setShowLayoutDropdown] = useState<boolean>(false);
-  const [savedLayouts, setSavedLayouts] = useState<Infrastructure[]>([]);
+  const [savedLayouts, setSavedLayouts] = useState<Array<Infrastructure>>([]);
 
   // set the deployment status when deploy button is clicked i.e. the handleDeploy handler below.
   const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
   const [isDeploying, setIsDeploying] = useState(false);
 
   // state of connection lines/grids between the resources on canvas...
-  const [connections, setConnections] = useState<Array<{id: string, sourceId: string, targetId: string, sourceType: string, targetType: string, port: number }>>([]);
+  const [connections, setConnections] = useState<Array<ConnectionLine>>([]);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
-  /* ------Save the current state of canvas icons into localstorage prevents vanish on reloads----- */
+  // On clicking the resources on canavs -> a side panel opens showing there details/config...
+  const [selectedResourceForConfig, setSelectedResourceForConfig] = useState<string | null>(null);
+
+  /* ------Save the current state of canvas resources into localstorage prevents vanish on reloads----- */
   // state tracking for we have initialized the current state from localstorage or not
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -99,7 +108,7 @@ export function DndContextComponent() {
 
     setCurrentLayoutId(infrastructure.id);
     setCurrentLayoutName(infrastructure.name);
-    setCanvasResources(infrastructure.layout.icons || []);
+    setCanvasResources(infrastructure.layout.resources || []);
     setCurrentLayoutSaved(true);
     setShowLayoutDropdown(false);
     setActiveDeploymentId(null);
@@ -167,7 +176,7 @@ export function DndContextComponent() {
       return;
     }
     try {
-      const createdInfrastructure = await createInfrastructure(name, { icons: canvasResources });
+      const createdInfrastructure = await createInfrastructure(name, { resources: canvasResources });
       setCurrentLayoutId(createdInfrastructure.id);
       setCurrentLayoutName(createdInfrastructure.name);
       setCurrentLayoutSaved(true);
@@ -207,7 +216,7 @@ export function DndContextComponent() {
     try {
       const updatedInfrastructure = await updateInfrastructure(currentLayoutId, { 
         name, 
-        layout: { icons: canvasResources }
+        layout: { resources: canvasResources }
       });
       setCurrentLayoutName(name);
       setCurrentLayoutSaved(true);
@@ -303,6 +312,7 @@ export function DndContextComponent() {
   }
 
   /* ----------------------Canvas Resources------------------ */
+  // Delete canvas resource
   const handleDeleteCanvasResource = (resourceId: string) => {
     if(isDeploying) {
       return; // Deployment already in process
@@ -320,25 +330,8 @@ export function DndContextComponent() {
   }
 
   /* ----------------------CONNECTION LINES BETWEEN RESOURCES ON CANVAS------------------ */
-  const getDefaultPortOfResources = (type: string): number => {
-    const ports: Record<string, number> = {
-      "CDN": 443,
-      "Load Balancer": 80,
-      "Virtual Machine": 22,
-      "Database": 5432,
-      "Cache": 6379,
-      "Message Queue": 5672,
-      "DNS": 53,
-      "Monitoring Agent": 9090,
-      "Container Registry": 443,
-      "Firewall": 0,
-      "Object Storage": 0
-    }
-
-    return ports[type] || 80; // default as 80
-  }
-
-  const hanldeResouceClick = (resourceId: string, resourceType: string) => {
+  // Form connection line between 2 resources
+  const hanldeResouceClick = (resourceId: string, resourceType: ResourceType) => {
     if(!isConnecting) {
       return;
     }
@@ -351,8 +344,22 @@ export function DndContextComponent() {
     }
     else { // create connection
       const sourceItem = canvasResources.find(resource => resource.id === selectedResource);
+
+      if(!sourceItem) {
+        return;
+      }
+
+      const validConnection = validateConnection(sourceItem.type, resourceType);
+
+      if(!validConnection.valid) { // Check even connection is valid or not
+        alert(validConnection.message);
+        setSelectedResource(null);
+        return;
+      }
+
       if(sourceItem) {
-        const port = getDefaultPortOfResources(sourceItem.type);
+        const port = RESOURCE_PORTS[sourceItem.type] || 80;
+
         setConnections(prev => [...prev, {
           id: `connection-${Date.now()}`,
           sourceId: selectedResource,
@@ -371,6 +378,26 @@ export function DndContextComponent() {
     setSelectedResource(null);
   }
 
+  /* Config panel to show the detailes of the resouces present on the canvas by double clicking it... */
+  const handleResourceDoubleClickShowConfig = (resourceId: string) => {
+    setSelectedResourceForConfig(resourceId);
+  }
+  // close the config by clicking anywhere except the config panel itself.
+  useEffect(() => {
+    const handleClickOutsideConfigPanel = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if(!target.closest(".config-panel-container")) {
+        setSelectedResourceForConfig(null);
+      }
+    }
+    
+    if(selectedResourceForConfig) {
+      document.addEventListener("click", handleClickOutsideConfigPanel);
+    }
+
+    return () => document.removeEventListener("click", handleClickOutsideConfigPanel);
+  }, [selectedResourceForConfig])
+
   return (
     <DndContext
       sensors={sensors}
@@ -384,7 +411,6 @@ export function DndContextComponent() {
         setActiveDrag(null);
         
         console.log("over id: ", event.over?.id);
-
         
         if(event.over?.id === "canvas") {
           setCurrentLayoutSaved(false); // tracking there was a new resource added to the canvas
@@ -430,7 +456,7 @@ export function DndContextComponent() {
             ...prev,
             {
               id: `${active.id}-${Date.now()}`,
-              type: active.id as string,
+              type: active.id as ResourceType,
               emoji: emoji,
               x,
               y
@@ -477,10 +503,19 @@ export function DndContextComponent() {
             connections={connections}
             selectedResource={selectedResource}
             isConnecting={isConnecting}
+            onResourceDoubleClick={handleResourceDoubleClickShowConfig}
           />
         </div>
       </div>
-      
+
+      {/* Config/Detail Panel for resource of Canvas */}
+      {selectedResourceForConfig && (
+        <ConfigPanelOfCanvasResource 
+          resource={canvasResources.find(resource => resource.id === selectedResourceForConfig)}
+          onClose={() => setSelectedResourceForConfig(null)}
+        />
+      )}
+
       {/* Deploy button press affect */}
       {activeDeploymentId &&
         <DeploymentPipeline 
@@ -495,4 +530,4 @@ export function DndContextComponent() {
       }
     </DndContext>
   )
-}
+} 

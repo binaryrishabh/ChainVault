@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { DEPLOYMENT_STAGES, PUBLISH } from "../../../../shared/constants"; // This is from the global shared constants file
+import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
+import { Publish } from "@shared/types/Publish.types";
+import { WebSocketMessage } from "@shared/types/WebSocketMessage.types";
+import type { Timeline } from "@/frontendTypes/Timeline.types";
+
 
 interface DeploymentPipelineProps {
   deploymentId: string;
@@ -11,7 +15,7 @@ interface DeploymentPipelineProps {
 export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onDeploymentComplete, onDeploymentFailed }: DeploymentPipelineProps) {
   const [ status, setStatus ] = useState<string>("pending");
   const [ completedStages, setCompletedStages ] = useState<string[]>([]);
-  const [ timeline, setTimeline ] = useState<Array<{ message: string, timestamp: string }>>([]);
+  const [ timeline, setTimeline ] = useState<Array<Timeline>>([]);
 
   useEffect(() => {
     let isClose = false; // To prevent the react strict mode to close the websocket connection due to running of useEffect 2 times. 
@@ -20,37 +24,68 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
 
     ws.onopen = () => {
       if(!isClose) {
-        ws.send(JSON.stringify({ type: "subscribe", deploymentId }))
+        ws.send(JSON.stringify({ type: WebSocketMessage.Subscribe, deploymentId }))
       }
     }
 
     ws.onmessage = (event) => {
-      if(!isClose) {
+      if (!isClose) {
         const data = JSON.parse(event.data);
 
-        setTimeline(prev => [...prev, { message: data.message, timestamp: data.timestamp }]);
-
-        switch(data.type) {
-          case PUBLISH.publishOutboxFailed:
-            setStatus("failed")
+        switch (data.type) {
+          case Publish.publishChaosInjected:
+            setTimeline(prev => [...prev, {
+              event: "Chaos Injected",
+              message: `${data.message}`,
+              timestamp: data.timestamp
+            }]);
             break;
 
-          case PUBLISH.publishDeploymentStarted:
+          case Publish.publishOutboxFailed:
+            setStatus("failed");
+            setTimeline(prev => [...prev, {
+              event: "Outbox Failed",
+              message: data.message,
+              timestamp: data.timestamp
+            }]);
+            break;
+
+          case Publish.publishDeploymentStarted:
             setStatus("running");
+            setTimeline(prev => [...prev, {
+              event: "Deployment Started",
+              message: data.message,
+              timestamp: data.timestamp
+            }]);
             break;
 
-          case PUBLISH.publishStageCompleted:
+          case Publish.publishStageCompleted:
             setCompletedStages(prev => [...prev, data.stageName]);
+            setTimeline(prev => [...prev, {
+              event: data.stageName,
+              message: data.message,
+              timestamp: data.timestamp
+            }]);
             break;
 
-          case PUBLISH.publishDeploymentCompleted:
+          case Publish.publishDeploymentCompleted:
             setStatus("completed");
             onDeploymentComplete();
+            setTimeline(prev => [...prev, {
+              event: "Deployment Completed",
+              message: data.message,
+              timestamp: data.timestamp
+            }]);
             break;
-          
-          case PUBLISH.publishDeploymentFailed:
+
+          case Publish.publishDeploymentFailed:
             setStatus("failed");
             onDeploymentFailed();
+            setTimeline(prev => [...prev, {
+              event: "Deployment Failed",
+              message: data.message,
+              timestamp: data.timestamp
+            }]);
             break;
         }
       }
@@ -126,8 +161,11 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
       <div className="max-h-24 overflow-y-auto text-xs text-gray-400 space-y-0.5">
         {timeline.map((entry, i) => (
           <div key={i} className="flex gap-2">
-            <span className="text-gray-600 shrink-0">
+            <span className="text-gray-600 shrink-0 w-20">
               {new Date(entry.timestamp).toLocaleTimeString()}
+            </span>
+            <span className="text-gray-500 shrink-0 w-35">
+              {entry.event}
             </span>
             <span>
               {entry.message}

@@ -1,6 +1,8 @@
+import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants";
+
 interface ManhattenLineProps {
-  source: { x: number; y: number; type: string };
-  target: { x: number; y: number; type: string };
+  source: { x: number; y: number; type: ResourceType };
+  target: { x: number; y: number; type: ResourceType };
   port: number;
 }
 

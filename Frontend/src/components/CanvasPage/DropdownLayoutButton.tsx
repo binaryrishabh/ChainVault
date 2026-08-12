@@ -1,4 +1,4 @@
-import type { Infrastructure } from "../../Types/Infrastructure.types";
+import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
 
 interface DropdownLayoutButtonProps {
   currentLayoutId: string | null;
