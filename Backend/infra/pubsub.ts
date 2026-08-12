@@ -1,14 +1,24 @@
 import { redis } from "./redis";
-import { PUBLISH } from "../../shared/constants";
+import { Publish } from "@shared/types/Publish.types";
 
 /* ------------------------Publisher code--------------------- */
 // These are publishers that the worker and outbox will call so that the client could be informed through web socket that what is going on behind at each step through subscribers.....
 
-// 1. The pushing of deployment inside the BullMQ failed 
+// 0. The pushing of chaos notification directly to client through specific channel to which client has subscribed via websocket...
+export const publishChaosInjected = async(entry: any) => {
+  await redis.publish(`deployment:${(entry.payload as any).deploymentId}:updates`, JSON.stringify({
+    ...(entry.payload as any),
+    publishType: Publish.publishChaosInjected,
+    timestamp: new Date().toISOString()
+  })
+  )
+}
+
+// 1. The pushing of deployment inside the BullMQ failed
 export const publishOutboxFailed = async (deploymentId: string, reason: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH.publishOutboxFailed,
+    publishType: Publish.publishOutboxFailed,
     message: reason,
     timestamp: new Date().toISOString()
   }))
@@ -18,7 +28,7 @@ export const publishOutboxFailed = async (deploymentId: string, reason: string) 
 export const publishDeploymentStarted = async(deploymentId: string, resourceCount: number) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH.publishDeploymentStarted,
+    publishType: Publish.publishDeploymentStarted,
     status: "running",
     resourceCount,
     message: `Deployment started with ${resourceCount} resources`,
@@ -31,7 +41,7 @@ export const publishDeploymentStarted = async(deploymentId: string, resourceCoun
 export const publishStageCompleted = async (deploymentId: string, stageName: string, resourceCount: number, stateMessage: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH.publishStageCompleted,
+    publishType: Publish.publishStageCompleted,
     stageName,
     message: stateMessage,
     timestamp: new Date().toISOString()
@@ -43,7 +53,7 @@ export const publishStageCompleted = async (deploymentId: string, stageName: str
 export const publishDeploymentCompleted = async(deploymentId: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH.publishDeploymentCompleted,
+    publishType: Publish.publishDeploymentCompleted,
     status: "completed",
     message: "All stages completed. Infrastructure is ready.",
     timestamp: new Date().toISOString()
@@ -51,16 +61,17 @@ export const publishDeploymentCompleted = async(deploymentId: string) => {
 }
 
 
-// 5. Deployment dailed during processing by worker
+// 5. Deployment failed during processing by worker
 export const publishDeploymentFailed = async(deploymentId: string, reason: string) => {
   await redis.publish(`deployment:${deploymentId}:updates`, JSON.stringify({
     deploymentId,
-    type: PUBLISH.publishDeploymentFailed,
+    publishType: Publish.publishDeploymentFailed,
     status: "failed",
     message: reason,
     timestamp: new Date().toISOString()
   }))
 }
+
 
 /* ------------------------Subscriber code--------------------- */
 // this is to where all websocket servers are listening to and listens when there deploymentId matches or the client that's wanting the deploymentId matches

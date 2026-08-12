@@ -1,18 +1,20 @@
-import type { Resource, StageResult } from "../../shared/types";
+import { RESOURCE_TYPES } from "@shared/constants/RESOURCE_TYPES.constants";
+import type { Resource } from "@shared/types/Resource.types";
+import type { StageResult } from "@shared/types/StageResult.types";
 
 export const runCostEstimation = (resources: Resource[]): StageResult => {
   const pricing: Record<string, number> = {
-    "Virtual Machine": 15,   // ~$15/month for a small AWS EC2 (t3.small)
-    "Database": 40,          // ~$40/month for a small RDS instance
-    "Load Balancer": 20,     // ~$20/month for AWS ALB
-    "Object Storage": 5,     // ~$5/month for 100GB S3
-    "CDN": 10,               // ~$10/month for CloudFront (low traffic)
-    "Cache": 25,             // ~$25/month for Redis ElastiCache (small)
-    "Message Queue": 30,     // ~$30/month for SQS/SNS or RabbitMQ
-    "DNS": 3,                // ~$3/month for Route 53
-    "Firewall": 10,          // ~$10/month for AWS WAF (basic)
-    "Container Registry": 15, // ~$15/month for ECR
-    "Monitoring Agent": 8,   // ~$8/month for CloudWatch (basic)
+    [RESOURCE_TYPES.DNS]: 3,                // ~$3/month for Route 53
+    [RESOURCE_TYPES.CDN]: 10,               // ~$10/month for CloudFront (low traffic)
+    [RESOURCE_TYPES.Firewall]: 10,          // ~$10/month for AWS WAF (basic)
+    [RESOURCE_TYPES.LoadBalancer]: 20,     // ~$20/month for AWS ALB
+    [RESOURCE_TYPES.VirtualMachine]: 15,   // ~$15/month for a small AWS EC2 (t3.small)
+    [RESOURCE_TYPES.ContainerRegistry]: 15, // ~$15/month for ECR
+    [RESOURCE_TYPES.Cache]: 25,             // ~$25/month for Redis ElastiCache (small)
+    [RESOURCE_TYPES.Database]: 40,          // ~$40/month for a small RDS instance
+    [RESOURCE_TYPES.MessageQueue]: 30,     // ~$30/month for SQS/SNS or RabbitMQ
+    [RESOURCE_TYPES.ObjectStorage]: 5,     // ~$5/month for 100GB S3
+    [RESOURCE_TYPES.MonitoringAgent]: 8,   // ~$8/month for CloudWatch (basic)
   }
 
   let monthlyEstimate = 0;

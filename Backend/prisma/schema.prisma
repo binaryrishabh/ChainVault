@@ -31,7 +31,9 @@ model Deployment {
   updatedAt             DateTime                    @updatedAt
 }
 
-// Basically as schema to keep track the atomicity of deployment. That either added to database and queue both or none.
+// Basically a schema to keep track of atomicity of events. It's being used in deployment and chaos injection /currently. 
+// i. In deployment it keeps track of either the deployment gets added to queue and mark completed at database or none happens...
+// ii. In chaos-injection 
 model Outbox {
   id                    String           @id        @default(uuid())
   eventType             String

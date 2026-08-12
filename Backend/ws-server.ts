@@ -1,6 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import http from "http";
 import { subscribeToDeployment } from "./infra/pubsub";
+import { WebSocketMessage } from "@shared/types/WebSocketMessage.types"
 
 const httpSever = http.createServer((req: any, res: any) => {
   console.log("Http server 3001 connected successfully. The first handshake for websocket server.");
@@ -16,7 +17,7 @@ wss.on("connection", (socket) => {
     try {
       const message = JSON.parse(data.toString());
 
-      if(message.type === "subscribe") {
+      if(message.type === WebSocketMessage.Subscribe) {
         const { deploymentId } = message;
 
         console.log(`Client subscribed to deployment: ${deploymentId}`);

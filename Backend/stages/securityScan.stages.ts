@@ -1,12 +1,14 @@
-import type { Resource, StageResult } from "../../shared/types";
+import { RESOURCE_TYPES } from "@shared/constants/RESOURCE_TYPES.constants";
+import type { Resource } from "@shared/types/Resource.types";
+import type { StageResult } from "@shared/types/StageResult.types";
 
 export const runSecurityScan = (resources: Resource[]): StageResult => {
   const issues: string[] = [];
 
   for(const resource of resources) {
     // Public Database check
-    if(resource.type === "Database" && resource.public === true) {
-      issues.push(`Database ${resource.type} should not be publicly accessible`);
+    if(resource.type === RESOURCE_TYPES.Database && resource.public === true) {
+      issues.push(`Database should not be publicly accessible`);
     }
 
     // Open SSH port check

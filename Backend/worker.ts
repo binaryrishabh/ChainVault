@@ -2,122 +2,123 @@ import { Worker } from "bullmq";
 import { redis } from "./infra/redis";
 import { prisma } from "./lib/prisma";
 import { deploymentQueue } from "./infra/queue";
-import { publishDeploymentCompleted, publishDeploymentFailed, publishDeploymentStarted, publishOutboxFailed, publishStageCompleted } from "./infra/pubsub";
-import { OUTBOX_BullMQ_STATUS, DEPLOYMENT_STATUS, DEPLOYMENT_STAGES } from "../shared/constants";
-import type { DeploymentJob } from "../shared/types";
+import { publishChaosInjected, publishDeploymentCompleted, publishDeploymentFailed, publishDeploymentStarted, publishOutboxFailed, publishStageCompleted } from "./infra/pubsub";
 import { runSecurityScan } from "./stages/securityScan.stages"
 import { runCostEstimation } from "./stages/costEstimation.stages"
+import { OutboxBullMQStatus } from "@shared/types/OutboxBullMQStatus.types";
+import { DeploymentStatus } from "@shared/types/DeploymentStatus.types";
+import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
+import type { DeploymentJob } from "@shared/types/DeploymentJob.types";
 
 // Outbox processor-> Polls the unprocessed events from outbox table every 5 seconds and adds to BullMQ.
 // This is because we have implemented the atomicity in the /api/deployments api end-point code.
 // This is polling to the database server every 5 seconds. But at production shift to switch to CDC with Debezium and Kafka.
 
+// Wait 5s for Redis connection to establish before polling outbox
 await new Promise(r => setTimeout(r, 5000));
 
-setInterval( async() => {
+/*
+  OUTBOX PROCESSOR
+  Polls the outbox table every 5 seconds. Processes pending entries.
+  
+  Two delivery paths:
+    1. "deployment-created"  →  BullMQ queue  →  Worker processes 7 stages
+    2. "chaos-injected"      →  Redis Pub/Sub  →  WebSocket clients directly
+  
+  Why: Chaos events don't need BullMQ processing. They just need real-time
+  notification. Skipping BullMQ reduces latency and keeps the queue clean.
+  
+  Later Production upgrade path: Replace polling with CDC (Debezium + Kafka).
+*/
+setInterval(async () => {
   try {
+    // 1. FETCH — Get up to 10 unprocessed entries, ordered by fewest retries first
     const unprocessed = await prisma.outbox.findMany({
       where: {
-        status: OUTBOX_BullMQ_STATUS.PENDING, // Only filter out pending.. Failed will never be retried
-        // NOTE: maxRetries in Outbox model is 4. This lt: 4 must match.
-        // If you change one, change both, the other in Oubox schema.
-        retries: {
-          lt: 4
-        }
+        status: OutboxBullMQStatus.PENDING,
+        retries: { lt: 4 }  // Must match maxRetries in Outbox model
       },
-      orderBy: [{
-          retries: "asc"  // Pick retries with fewest retries first
-        }, {
-          createdAt: "asc" // Pick them with oldest first
-      }],
-      take: 10 // picks 10 at max from the find list every 5 seconds
+      orderBy: [
+        { retries: "asc" },    // Entries with fewest retries get priority
+        { createdAt: "asc" }   // Older entries first
+      ],
+      take: 10
     });
 
-    // traversing to the lists of unprocessed deployments
-    for(const entry of unprocessed) {
-      // i. mark each unprocessed deployment as pending -> processing
+    // 2. PROCESS — Handle each entry
+    for (const entry of unprocessed) {
+      // 2a. Mark as processing (prevents duplicate picks if we scale to multiple pollers)
       await prisma.outbox.update({
-        where: {
-          id: entry.id // Here it is outbox id
-        },
-        data: {
-          status: OUTBOX_BullMQ_STATUS.PROCESSING
-        }
-      })
-      
-      // This is because to keep the atomicity i.e. either the outbox update failes or queue add failes the process will remain pending
-      try {
-        // ii.
-        // adding the unprocessed deployments to the queue. First the queue picks it up processes it then only the below updation takes place of the outbox table with status "completed"
-        await deploymentQueue.add(entry.eventType, entry.payload, {
-          jobId: (entry.payload as any).deploymentId
-        });
+        where: { id: entry.id },
+        data: { status: OutboxBullMQStatus.PROCESSING }
+      });
 
-        // iii.
-        // Update the deployment from processign -> completed
+      try {
+        // 2b. DELIVER — Route based on event type
+        if (entry.eventType === "chaos-injected") {
+          // Chaos events: publish directly to Redis Pub/Sub.
+          // No BullMQ needed — just real-time notification.
+          await publishChaosInjected(entry);
+        } else {
+          // Deployment events: add to BullMQ queue for worker processing.
+          // jobId = deploymentId ensures idempotency — duplicates are ignored.
+          await deploymentQueue.add(entry.eventType, entry.payload, {
+            jobId: (entry.payload as any).deploymentId
+          });
+        }
+
+        // 2c. Mark as completed — delivery succeeded
         await prisma.outbox.update({
-          where: {
-            id: entry.id
-          },
+          where: { id: entry.id },
           data: {
-            status: OUTBOX_BullMQ_STATUS.COMPLETED,
+            status: OutboxBullMQStatus.COMPLETED,
             processedAt: new Date()
           }
-        })
-      }
-      catch (err: any) {
-        // iv. Queue failed
-        // Q: What if queue.add succeeds but outbox update to "completed" fails.
-        // Outbox stays "processing". Next poll picks it up again.
-        // Queue.add fires again but BullMQ ignores duplicate because jobId = deploymentId.
-        // Outbox update retries and eventually succeeds. No duplicate jobs. No lost deployments.
-        // This is at-least-once delivery with idempotent job dispatch.
-        const newRetries = entry.retries + 1;
-        const isFailed: boolean = newRetries >= entry.maxRetries;
+        });
+
+      } catch (err: any) {
+        // 2d. DELIVERY FAILED — Retry or abandon
         
-        // Always update outbox — back to pending for retry, or failed if exhausted
+        const newRetries = entry.retries + 1;
+        const isFailed = newRetries >= entry.maxRetries;
+
+        // Update retry count and status
         await prisma.outbox.update({
-          where: {
-            id: entry.id // This the outbox id
-          },
+          where: { id: entry.id },
           data: {
-            status: isFailed ? OUTBOX_BullMQ_STATUS.FAILED : OUTBOX_BullMQ_STATUS.PENDING,
+            status: isFailed ? OutboxBullMQStatus.FAILED : OutboxBullMQStatus.PENDING,
             retries: newRetries,
             error: err.message
           }
         });
-        
-        // If permanently failed, update deployment and notify
-        if(isFailed) {
-          await prisma.deployment.update({
-            where: {
-              id: (entry.payload as any).deploymentId
-            },
-            data: {
-              status: DEPLOYMENT_STATUS.FAILED
-            }
-          })
 
-          // Publish that current deployemt couldn't be inserted into queue. and retries also exhausted.
+        // If permanently failed, mark deployment as failed and notify
+        if (isFailed) {
+          await prisma.deployment.update({
+            where: { id: (entry.payload as any).deploymentId },
+            data: { status: DeploymentStatus.FAILED }
+          });
+
           await publishOutboxFailed(
             (entry.payload as any).deploymentId,
-            "BullMQ failed to push the service."
+            "Outbox delivery exhausted all retries."
           );
 
-          console.error(`Outbox: ${entry.id} with deploymentId: ${(entry.payload as any).deploymentId} permanently failed: ${err.message}`);
-        }
-        else {
-          console.error(`Outbox ${entry.id} with deploymentId: ${(entry.payload as any).deploymentId} will retry (${newRetries}/${entry.maxRetries} times max): ${err.message}`);
+          console.error(
+            `Outbox ${entry.id} | deployment ${(entry.payload as any).deploymentId} | PERMANENTLY FAILED | ${err.message}`
+          );
+        } else {
+          console.error(
+            `Outbox ${entry.id} | deployment ${(entry.payload as any).deploymentId} | Retry ${newRetries}/${entry.maxRetries} | ${err.message}`
+          );
         }
       }
     }
+  } catch (err: any) {
+    // Outer catch — errors here don't crash the poller. Next interval retries.
+    console.error(`Outbox poller error: ${err.message}`);
   }
-  catch (err: any) {
-    // errors are logged not thrown so that queue processor keeps running
-    console.error(`Outbox queue processor error: ${err.message}`);
-  }
-}, 5000)
-
+}, 5000);
 
 
 const worker = new Worker (
@@ -133,7 +134,7 @@ const worker = new Worker (
           id: deploymentId,
         },
         data: {
-          status: DEPLOYMENT_STATUS.RUNNING
+          status: DeploymentStatus.RUNNING
         }
       });
 
@@ -215,7 +216,7 @@ const worker = new Worker (
           id: deploymentId
         },
         data: {
-          status: DEPLOYMENT_STATUS.COMPLETED
+          status: DeploymentStatus.COMPLETED
         }
       });
 
@@ -231,7 +232,7 @@ const worker = new Worker (
           id: deploymentId
         },
         data: {
-          status: DEPLOYMENT_STATUS.FAILED
+          status: DeploymentStatus.FAILED
         }
       });
 

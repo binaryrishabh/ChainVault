@@ -3,12 +3,14 @@ const app = express();
 import cors from "cors";
 import { prisma } from "./lib/prisma";
 import crypto from "crypto";
-import { InfrastructureIdSchema, InfrastructureBodySchema, UpdateInfrastructureBodySchema } from "./zod_schemas/infrastructure.schema";
 import { errorHandler } from "./utils/middleware";
 import { ValidationError, NotFoundError } from "./utils/errors";
 import { config } from "./utils/config";
 import { rateLimiter } from "./utils/rateLimiter";
 import { deploymentQueue } from "./infra/queue";
+import { InfrastructureIdSchema, InfrastructureBodySchema, UpdateInfrastructureBodySchema } from "./zod_schemas/infrastructure.schema";
+import { ChaosInjectionBodySchema, DeploymentIdSchema } from "./zod_schemas/deployment.schema";
+import { validateDeploymentReadiness } from "@shared/validateConnectionRules";
 
 app.use(rateLimiter);
 app.use(cors());
@@ -194,8 +196,15 @@ app.post("/api/deployments", async(req, res) => {
     throw new NotFoundError("Infrastructue not found with the given id.");
   }
 
-  const resources = (infrastructure.layout as any).icons || [];
+  const resources = (infrastructure.layout as any).resources || [];
   const resourceCount = resources.length;
+
+  // Before deploying check the readiness of deployment as current resources could even be deployed or not.
+  // const deploymentReadiness = validateDeploymentReadiness(resources);
+  // if(!deploymentReadiness.valid) {
+    
+  //   throw new ValidationError("Cannot deploy:\n"+ deploymentReadiness.issues.join("\n"));
+  // }
 
   // Generating a uuid on our own because we are implementing the atmoicity on deployment and outbox table so if we stay dependent on the id created by the postgres when the deployment gets stored then we have to update the deploymentId field of the outbox table later on seperately. But, by this we can put the deploymentId value for both of them within same transaction.
   const deploymentId = crypto.randomUUID();
@@ -228,6 +237,80 @@ app.post("/api/deployments", async(req, res) => {
   })
 })
 
+// Chaos Injection endpoint
+app.post("/api/deployments/:deploymentId/chaos", async(req, res) => {
+  const DeploymentId = DeploymentIdSchema.safeParse(req.params);
+
+  if(!DeploymentId.success) {
+    const errorMessages = DeploymentId.error.issues.map(err => err.message).join(", ");
+    throw new ValidationError(errorMessages);
+  }
+
+  const ChaosInjectionData = ChaosInjectionBodySchema.safeParse(req.body);
+
+  if(!ChaosInjectionData.success) {
+    const errorMessages = ChaosInjectionData.error.issues.map(err => err.message).join(", ");
+    throw new ValidationError(errorMessages);
+  }
+
+  const { deploymentId } = DeploymentId.data;
+  const { type, resourceId } = ChaosInjectionData.data;
+
+  // Validate deployment exists and is running
+  const deployment = await prisma.deployment.findUnique({
+    where: {
+      id: deploymentId
+    }
+  })
+
+  if(!deployment) {
+    throw new NotFoundError("Deployemnt Not Found with specified id"+ deploymentId);
+  }
+
+  if(deployment.status !==  "running") {
+    throw new ValidationError("Can only inject chaos into a running deployment");
+  }
+
+  // Add chaos event to deployment
+  const currentChaosEvent = (deployment.chaosEvents as any) || [];
+  currentChaosEvent.push({
+    timeStamp: new Date().toISOString(),
+    type,
+    resourceId,
+    message: `Chaos injected ${type} on ${resourceId}`
+  })
+
+  // Update into deployment row i.e. DB
+  const [updatedDeploymentAfterChaosAdded] = await prisma.$transaction([
+    prisma.deployment.update({
+      where: {
+        id: deploymentId
+      },
+      data: {
+        chaosEvents: currentChaosEvent
+      }
+    }),
+    prisma.outbox.create({ // It's default status is pending...
+      data: {
+        eventType: "chaos-injected",
+        payload: {
+          deploymentId,
+          chaosType: type,
+          resourceId,
+          message: `Chaos ${type} injected on resource`
+        }
+      }
+    })
+  ])
+
+  res.status(200).json({
+    success: true,
+    message: "Chaos injected",
+    updatedDeploymentAfterChaosAdded
+  })
+})
+
+// testing of adding resource to queue manually.
 app.post("/api/test-deploy", async(req, res) => {
   await deploymentQueue.add("test-deployment", {
     deploymentId: "test-123",
