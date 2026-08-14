@@ -9,6 +9,8 @@ import { OutboxBullMQStatus } from "@shared/types/OutboxBullMQStatus.types";
 import { DeploymentStatus } from "@shared/types/DeploymentStatus.types";
 import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
 import type { DeploymentJob } from "@shared/types/DeploymentJob.types";
+import type { Deployment } from "@shared/types/Deployment.types";
+import type { Stages } from "@shared/types/Stages.types";
 
 // Outbox processor-> Polls the unprocessed events from outbox table every 5 seconds and adds to BullMQ.
 // This is because we have implemented the atomicity in the /api/deployments api end-point code.
@@ -145,6 +147,29 @@ const worker = new Worker (
       
       // 2. Process each stage
       for(const stage of DEPLOYMENT_STAGES) { // DEPLOYMENT_STAGES This is from the global shared constants file
+        // Read the deployment from DB for each stage so that we could prevent stale data if something else modified it.
+        // 0. Ckeck if this stage is already completed(idempotency)
+        const currentDeployment = await prisma.deployment.findUnique({
+          where: {
+            id: deploymentId
+          }
+        });
+
+        if(!currentDeployment) {
+          console.error(`Deployment ${deploymentId} not found in DB. Skipping stage.`);
+          return;
+        }
+
+        const existingStages: Stages[] = (currentDeployment?.stages as any) || [];
+        // Find which all existing changes already completed so that u can skip...
+        const alreadyDone = existingStages.some(existingStage => existingStage.name === stage && existingStage.status === "completed");
+
+        // Skip if already done
+        if(alreadyDone) {
+          console.log(`${stage} already completed. Skipping.`);
+          continue;
+        }
+
         // Simulate work
         let stateMessage = "";
 
@@ -165,15 +190,9 @@ const worker = new Worker (
         
         await new Promise(waitHere => setTimeout(waitHere, 2000)); // Wait here for 2 seconds between each stage
 
-        // Read the deployment from DB for each stage  so that we could prevent stale data if something else modified it.
-        const deployment = await prisma.deployment.findUnique({
-          where: {
-            id: deploymentId
-          }
-        });
 
         // Add stage entry for current stage which will get updated to db finally
-        const currentStages = (deployment?.stages as any[]) || [];
+        const currentStages = (currentDeployment?.stages as any[]) || [];
 
         currentStages.push({
           name: stage,
@@ -184,7 +203,7 @@ const worker = new Worker (
         });
 
         // Add timeline entry for current stage which will get updated to db finally
-        const currentTimeline = (deployment?.timeline as any[]) || [];
+        const currentTimeline = (currentDeployment?.timeline as any[]) || [];
         currentTimeline.push({
           timestamp: new Date().toISOString(),
           event: stage,

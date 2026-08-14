@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { DEPLOYMENT_CHAOS } from "@shared/constants";
+import { DEPLOYMENT_CHAOS } from "@shared/constants/DEPLOYMENT_CHAOS.constants";
 
 export const ChaosInjectionBodySchema = z.object({
   type: z.enum(DEPLOYMENT_CHAOS, "Must be of the specified chaos type only"),

@@ -175,6 +175,7 @@ app.delete("/api/infrastructure", async(req, res) => {
 
 
 /* -----------------The Deployment CRUD code---------------------- */
+// Create new deployment
 app.post("/api/deployments", async(req, res) => {
   const InfrastructureId = InfrastructureIdSchema.safeParse(req.body);
   
@@ -234,6 +235,34 @@ app.post("/api/deployments", async(req, res) => {
     success: true,
     message: "The deployment created successfully",
     createdDeployment
+  })
+})
+
+// Get dtails of existing deployment
+app.get("/api/deployment/:deploymentId", async(req, res) => {
+  const DeploymentId = DeploymentIdSchema.safeParse(req.params);
+
+  if(!DeploymentId.success) {
+    const errorMessages = DeploymentId.error.issues.map(err => err.message).join(", ");
+    throw new ValidationError(errorMessages);
+  }
+
+  const { deploymentId } = DeploymentId.data;
+
+  const deployment = await prisma.deployment.findUnique({
+    where: {
+      id: deploymentId
+    }
+  })
+
+  if(!deployment) {
+    throw new NotFoundError("No deployment with the specified id: "+ deploymentId);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "We have fetched the deployment successfully",
+    deployment
   })
 })
 
