@@ -7,4 +7,4 @@ export enum Publish {
   publishDeploymentFailed = "deployment-failed"
 }
 
-export type PublishType = typeof Publish;
+export type PublishType = (typeof Publish)[keyof typeof Publish];

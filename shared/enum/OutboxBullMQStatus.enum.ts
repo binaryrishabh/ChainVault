@@ -5,4 +5,4 @@ export enum OutboxBullMQStatus {
   FAILED = "failed"
 }
 
-export type OutboxBullMQStatusType = typeof OutboxBullMQStatus;
+export type OutboxBullMQStatusType = (typeof OutboxBullMQStatus)[keyof typeof OutboxBullMQStatus];

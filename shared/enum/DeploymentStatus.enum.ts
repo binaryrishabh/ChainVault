@@ -5,4 +5,4 @@ export enum DeploymentStatus {
   FAILED = "failed"
 }
 
-export type DeploymentStatusType = typeof DeploymentStatus;
+export type DeploymentStatusType = (typeof DeploymentStatus)[keyof typeof DeploymentStatus];
