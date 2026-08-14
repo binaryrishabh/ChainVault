@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
-import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
-import { Publish } from "@shared/types/Publish.types";
-import { WebSocketMessage } from "@shared/types/WebSocketMessage.types";
-import type { Timeline } from "@shared/types/Timeline.types";
 import { getSpecificDeployment } from "@/api/api";
+import { DEPLOYMENT_STAGES_NAMES } from "@shared/constants/DEPLOYMENT_STAGES_NAMES.constants";
+import { Publish } from "@shared/enum/Publish.enum";
+import { WebSocketMessage } from "@shared/enum/WebSocketMessage.enum";
+import { DeploymentStageStatus } from "@shared/enum/DeploymentStageStatus.enum";
+import { DeploymentStatus, type DeploymentStatusType } from "@shared/enum/DeploymentStatus.enum";
+import { DeploymentTimelineEventNames } from "@shared/enum/DeploymentTimelineEventNames.enum"
+import type { DeploymentTimeline } from "@shared/types/DeploymentTimeline.types";
 import type { Deployment } from "@shared/types/Deployment.types";
+import type { DeploymentStages } from "@shared/types/DeploymentStages.types"
+
+
+const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3001";
 
 interface DeploymentPipelineProps {
   deploymentId: string;
@@ -13,10 +20,12 @@ interface DeploymentPipelineProps {
   onDeploymentFailed: () => void;
 }
 
+type PipelineUIStatus = DeploymentStatusType | "Web Socket connection error";
+
 export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onDeploymentComplete, onDeploymentFailed }: DeploymentPipelineProps) {
-  const [ status, setStatus ] = useState<string>("pending");
+  const [ status, setStatus ] = useState<PipelineUIStatus>(DeploymentStatus.PENDING);
   const [ completedStages, setCompletedStages ] = useState<string[]>([]);
-  const [ timeline, setTimeline ] = useState<Array<Timeline>>([]);
+  const [ timeline, setTimeline ] = useState<Array<DeploymentTimeline>>([]);
 
   useEffect(() => {
     let isClose = false; // Component unmounted cleanup the ws connection
@@ -36,32 +45,19 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
           setStatus(deployment.status);
           setCompletedStages(
             (deployment.stages || [])
-            .filter((stage: any) => stage.status === "completed")
-            .map((stage: any) => stage.name)
+            .filter((stage: DeploymentStages) => stage.status === DeploymentStageStatus.COMPLETED)
+            .map((stage: DeploymentStages) => stage.name)
           )
 
-          setTimeline(prev => { // prev = current UI timeline [A, B, C]
-            const dbTimeline = deployment.timeline || []; // db timeline = [A, B, C, D, E, F] if worker drop and database went ahead and ui left behind
-
-            // Check what is already there in timeline of UI.
-            const isAlreadyInUI = (entry: Timeline) => {
-              return prev.some(p => 
-                p.timestamp === entry.timestamp && p.event === entry.event && p.message === entry.message
-              )
-            }
-
-            const missing = dbTimeline.filter(entry => !isAlreadyInUI(entry));
-
-            return [...prev, ...missing]; // Returns present state of timeline from dp
-          });
+          setTimeline(deployment.timeline || []);
 
           //If deployment already in it's final stage or completely failed by the worker server, don't open ws connection
-          if(deployment.status === "completed") {
+          if(deployment.status === DeploymentStatus.COMPLETED) {
             isServerStateFailed = true;
             onDeploymentComplete();
             return;
           }
-          if(deployment.status === "failed") {
+          if(deployment.status === DeploymentStatus.FAILED) {
             isServerStateFailed = true;
             onDeploymentFailed();
             return;
@@ -72,8 +68,13 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
         console.log("Resync of deployment status from DB failed: "+ err);
       }
 
+      // Check isClose before creating WebSocket
+      if(isClose) {
+        return;
+      }
+
       // ii. Now open websoket for live updates
-      ws = new WebSocket("ws://localhost:3001");
+      ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
         if(!isClose) {
@@ -91,16 +92,16 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
         switch (data.publishType) {
           case Publish.publishChaosInjected:
             setTimeline(prev => [...prev, {
-              event: "Chaos Injected",
+              event: DeploymentTimelineEventNames.ChaosInjected,
               message: `${data.message}`,
               timestamp: data.timestamp
             }]);
             break;
 
           case Publish.publishOutboxFailed:
-            setStatus("failed");
+            setStatus(DeploymentStatus.FAILED);
             setTimeline(prev => [...prev, {
-              event: "Outbox Failed",
+              event: DeploymentTimelineEventNames.OutboxFailed,
               message: data.message,
               timestamp: data.timestamp
             }]);
@@ -110,9 +111,9 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
             break;
 
           case Publish.publishDeploymentStarted:
-            setStatus("running");
+            setStatus(DeploymentStatus.RUNNING);
             setTimeline(prev => [...prev, {
-              event: "Deployment Started",
+              event: DeploymentTimelineEventNames.DeploymentStarted,
               message: data.message,
               timestamp: data.timestamp
             }]);
@@ -128,10 +129,10 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
             break;
 
           case Publish.publishDeploymentCompleted:
-            setStatus("completed");
+            setStatus(DeploymentStatus.COMPLETED);
             onDeploymentComplete();
             setTimeline(prev => [...prev, {
-              event: "Deployment Completed",
+              event: DeploymentTimelineEventNames.DeploymentCompleted,
               message: data.message,
               timestamp: data.timestamp
             }]);
@@ -140,10 +141,10 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
             break;
 
           case Publish.publishDeploymentFailed:
-            setStatus("failed");
+            setStatus(DeploymentStatus.FAILED);
             onDeploymentFailed();
             setTimeline(prev => [...prev, {
-              event: "Deployment Failed",
+              event: DeploymentTimelineEventNames.DeploymentFailed,
               message: data.message,
               timestamp: data.timestamp
             }]);
@@ -166,7 +167,7 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
 
       ws.onerror = () => {
         if(!isClose) {
-          setStatus("connection error");
+          setStatus("Web Socket connection error");
           ws.close();
         }
       }
@@ -193,11 +194,11 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
             Deployment:{" "}
             <span
               className={`${
-                status === "running"
+                status === DeploymentStatus.RUNNING
                   ? "text-blue-400"
-                  : status === "completed"
+                  : status === DeploymentStatus.COMPLETED
                   ? "text-green-400"
-                  : status === "failed"
+                  : status === DeploymentStatus.FAILED
                   ? "text-red-400"
                   : "text-gray-400"
               }`}
@@ -212,15 +213,15 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
 
       {/* Pipeline bars */}
       <div className="flex gap-1.5 mb-3">
-        {DEPLOYMENT_STAGES.map((stage) => {
-          const isCompleted = completedStages.includes(stage);
+        {DEPLOYMENT_STAGES_NAMES.map((stageName) => {
+          const isCompleted = completedStages.includes(stageName);
           const isCurrent = 
-            completedStages.length === DEPLOYMENT_STAGES.indexOf(stage) && status === "running";
+            completedStages.length === DEPLOYMENT_STAGES_NAMES.indexOf(stageName) && status === DeploymentStatus.RUNNING;
           const isFailed = 
-            status === "failed" && !isCompleted && completedStages.length === DEPLOYMENT_STAGES.indexOf(stage);
+            status === DeploymentStatus.FAILED && !isCompleted && completedStages.length === DEPLOYMENT_STAGES_NAMES.indexOf(stageName);
           
             return (
-              <div key={stage} className="flex-1">
+              <div key={stageName} className="flex-1">
                 <div
                   className={`h-2 rounded-full transition-colors duration-300 ${
                     isCompleted
@@ -232,7 +233,7 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
                       : "bg-gray-800"
                   }`}
                 />
-                <p className="text-[10px] text-gray-500 mt-1 text-center truncate">{stage}</p>
+                <p className="text-[10px] text-gray-500 mt-1 text-center truncate">{stageName}</p>
               </div>
             )
         })}

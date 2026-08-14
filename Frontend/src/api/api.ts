@@ -2,8 +2,8 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000/api";
 
-import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
-import type { Deployment } from "@/frontendTypes/Deployment.types";
+import type { Infrastructure } from "@shared/types/Infrastructure.types";
+import type { Deployment } from "@shared/types/Deployment.types";
 
 /* ------------------Infrastructure api calls--------------- */
 export const getAllInfrastructure = async(): Promise<Infrastructure[]> => {  
@@ -60,7 +60,7 @@ export const createDeployment = async(infrastructureId: string): Promise<Deploym
 
 // Fetch data of existing deployment
 export const getSpecificDeployment = async(deploymentId: string): Promise<Deployment> => {
-  const response = await axios.get(`${API_URL}/deployment/${deploymentId}`);
+  const response = await axios.get(`${API_URL}/deployments/${deploymentId}`);
   
   return response.data.deployment;
 }
