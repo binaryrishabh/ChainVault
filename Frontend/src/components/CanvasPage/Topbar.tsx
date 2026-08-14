@@ -1,4 +1,4 @@
-import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
+import type { Infrastructure } from "@shared/types/Infrastructure.types";
 import { DropdownLayoutButton } from "./DropdownLayoutButton";
 import { TopbarButton } from "./TopbarButton";
 

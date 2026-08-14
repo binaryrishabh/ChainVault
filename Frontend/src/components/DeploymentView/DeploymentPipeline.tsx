@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
 import { Publish } from "@shared/types/Publish.types";
 import { WebSocketMessage } from "@shared/types/WebSocketMessage.types";
-import type { Timeline } from "@/frontendTypes/Timeline.types";
-
+import type { Timeline } from "@shared/types/Timeline.types";
+import { getSpecificDeployment } from "@/api/api";
+import type { Deployment } from "@shared/types/Deployment.types";
 
 interface DeploymentPipelineProps {
   deploymentId: string;
@@ -18,21 +19,76 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
   const [ timeline, setTimeline ] = useState<Array<Timeline>>([]);
 
   useEffect(() => {
-    let isClose = false; // To prevent the react strict mode to close the websocket connection due to running of useEffect 2 times. 
+    let isClose = false; // Component unmounted cleanup the ws connection
+    let isServerStateFailed = false; // Deployment done or failed, so stop reconnecting and close wx connection.
 
-    const ws = new WebSocket("ws://localhost:3001");
+    let ws: WebSocket;
+    let retries = 0;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
 
-    ws.onopen = () => {
-      if(!isClose) {
-        ws.send(JSON.stringify({ type: WebSocketMessage.Subscribe, deploymentId }))
+    const connect = async () => {
+      // i. First fetch current state from DB
+      try {
+        const deployment: Deployment = await getSpecificDeployment(deploymentId);
+        
+        if(deployment && !isClose) {
+          // Restore pipeline state from Database
+          setStatus(deployment.status);
+          setCompletedStages(
+            (deployment.stages || [])
+            .filter((stage: any) => stage.status === "completed")
+            .map((stage: any) => stage.name)
+          )
+
+          setTimeline(prev => { // prev = current UI timeline [A, B, C]
+            const dbTimeline = deployment.timeline || []; // db timeline = [A, B, C, D, E, F] if worker drop and database went ahead and ui left behind
+
+            // Check what is already there in timeline of UI.
+            const isAlreadyInUI = (entry: Timeline) => {
+              return prev.some(p => 
+                p.timestamp === entry.timestamp && p.event === entry.event && p.message === entry.message
+              )
+            }
+
+            const missing = dbTimeline.filter(entry => !isAlreadyInUI(entry));
+
+            return [...prev, ...missing]; // Returns present state of timeline from dp
+          });
+
+          //If deployment already in it's final stage or completely failed by the worker server, don't open ws connection
+          if(deployment.status === "completed") {
+            isServerStateFailed = true;
+            onDeploymentComplete();
+            return;
+          }
+          if(deployment.status === "failed") {
+            isServerStateFailed = true;
+            onDeploymentFailed();
+            return;
+          }
+        }
       }
-    }
+      catch (err) {
+        console.log("Resync of deployment status from DB failed: "+ err);
+      }
 
-    ws.onmessage = (event) => {
-      if (!isClose) {
+      // ii. Now open websoket for live updates
+      ws = new WebSocket("ws://localhost:3001");
+
+      ws.onopen = () => {
+        if(!isClose) {
+          retries = 0; // set it to 0 so after each connection retry starts exponential from 2 sec.
+          ws.send(JSON.stringify({ type: WebSocketMessage.Subscribe, deploymentId }));
+        }
+      }
+
+      ws.onmessage = (event) => {
+        if (isClose) {
+          return;
+        }
         const data = JSON.parse(event.data);
 
-        switch (data.type) {
+        switch (data.publishType) {
           case Publish.publishChaosInjected:
             setTimeline(prev => [...prev, {
               event: "Chaos Injected",
@@ -48,6 +104,9 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
               message: data.message,
               timestamp: data.timestamp
             }]);
+            isServerStateFailed = true; // queue failed to push the deployment so no need to retry the ws connection
+            onDeploymentFailed();
+            ws.close();
             break;
 
           case Publish.publishDeploymentStarted:
@@ -76,6 +135,8 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
               message: data.message,
               timestamp: data.timestamp
             }]);
+            isServerStateFailed = true; // The deplyment itself got completed so no need for retry the ws connection
+            ws.close();
             break;
 
           case Publish.publishDeploymentFailed:
@@ -86,24 +147,43 @@ export function DeploymentPipeline({ deploymentId, onDeploymentPreviewClose, onD
               message: data.message,
               timestamp: data.timestamp
             }]);
+            isServerStateFailed = true; // The deployment itself failed so no need to retry the ws connection
+            ws.close();
             break;
+        }
+      }
+
+      ws.onclose = () => {
+        if(isClose || isServerStateFailed) { // If component unmonted or server itself failed completely we don't reconnect
+          return;
+        }
+
+        // The delay will increase exponentially i.e. 2, 4, 8, 16, then capped at 30...
+        const delay = Math.min(30000, 1000 * 2 ** retries);
+        retries++;
+        reconnectTimeout = setTimeout(connect, delay);
+      }
+
+      ws.onerror = () => {
+        if(!isClose) {
+          setStatus("connection error");
+          ws.close();
         }
       }
     }
 
-    ws.onerror = () => {
-      if(!isClose) {
-        setStatus("connection error");
-      }
-    }
+    connect();
 
     return () => {
       isClose = true;
-      if(ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      if(reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
     }
-  }, [deploymentId]);
+  }, [deploymentId, onDeploymentComplete, onDeploymentFailed]);
 
   return (
     <div className="fixed bottom-0 left-16 right-0 bg-gray-950 border-t border-gray-800 p-4 z-40">

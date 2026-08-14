@@ -6,7 +6,7 @@ import { Topbar } from "./Topbar";
 import { createDeployment, createInfrastructure, deleteInfrastructure, getAllInfrastructure, updateInfrastructure } from "@/api/api";
 import { DeploymentPipeline } from "../DeploymentView/DeploymentPipeline";
 import { ConfigPanelOfCanvasResource } from "./ConfigPanelOfCanvasResource";
-import type { Infrastructure } from "@/frontendTypes/Infrastructure.types";
+import type { Infrastructure } from "@shared/types/Infrastructure.types";
 import type { ConnectionLine } from "@shared/types/ConnectionLine.types";
 import { RESOURCE_PORTS } from "@shared/constants/RESOURCE_PORTS.constants";
 import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants"
@@ -382,6 +382,7 @@ export function DndContextComponent() {
   const handleResourceDoubleClickShowConfig = (resourceId: string) => {
     setSelectedResourceForConfig(resourceId);
   }
+  
   // close the config by clicking anywhere except the config panel itself.
   useEffect(() => {
     const handleClickOutsideConfigPanel = (event: MouseEvent) => {
