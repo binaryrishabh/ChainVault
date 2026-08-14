@@ -1,8 +1,8 @@
 import { RESOURCE_TYPES } from "@shared/constants/RESOURCE_TYPES.constants";
 import type { Resource } from "@shared/types/Resource.types";
-import type { StageResult } from "@shared/types/StageResult.types";
+import type { DeploymentStageResult } from "@shared/types/DeploymentStageResult.types";
 
-export const runCostEstimation = (resources: Resource[]): StageResult => {
+export const runCostEstimation = (resources: Resource[]): DeploymentStageResult => {
   const pricing: Record<string, number> = {
     [RESOURCE_TYPES.DNS]: 3,                // ~$3/month for Route 53
     [RESOURCE_TYPES.CDN]: 10,               // ~$10/month for CloudFront (low traffic)

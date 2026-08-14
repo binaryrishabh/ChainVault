@@ -5,12 +5,14 @@ import { deploymentQueue } from "./infra/queue";
 import { publishChaosInjected, publishDeploymentCompleted, publishDeploymentFailed, publishDeploymentStarted, publishOutboxFailed, publishStageCompleted } from "./infra/pubsub";
 import { runSecurityScan } from "./stages/securityScan.stages"
 import { runCostEstimation } from "./stages/costEstimation.stages"
-import { OutboxBullMQStatus } from "@shared/types/OutboxBullMQStatus.types";
-import { DeploymentStatus } from "@shared/types/DeploymentStatus.types";
-import { DEPLOYMENT_STAGES } from "@shared/constants/DEPLOYMENT_STAGES.constants";
+import { OutboxBullMQStatus } from "@shared/enum/OutboxBullMQStatus.enum";
+import { DeploymentStatus } from "@shared/enum/DeploymentStatus.enum";
+import { DEPLOYMENT_STAGES_NAMES } from "@shared/constants/DEPLOYMENT_STAGES_NAMES.constants";
+import { DeploymentStageStatus } from "@shared/enum/DeploymentStageStatus.enum";
+import type { OutboxPayload } from "@shared/types/OutboxPayload.types";
 import type { DeploymentJob } from "@shared/types/DeploymentJob.types";
-import type { Deployment } from "@shared/types/Deployment.types";
-import type { Stages } from "@shared/types/Stages.types";
+import type { DeploymentStages } from "@shared/types/DeploymentStages.types";
+import type { DeploymentTimeline } from "@shared/types/DeploymentTimeline.types";
 
 // Outbox processor-> Polls the unprocessed events from outbox table every 5 seconds and adds to BullMQ.
 // This is because we have implemented the atomicity in the /api/deployments api end-point code.
@@ -20,7 +22,7 @@ import type { Stages } from "@shared/types/Stages.types";
 await new Promise(r => setTimeout(r, 5000));
 
 /*
-  OUTBOX PROCESSOR
+  What setInterval is doing:- OUTBOX PROCESSOR
   Polls the outbox table every 5 seconds. Processes pending entries.
   
   Two delivery paths:
@@ -32,13 +34,12 @@ await new Promise(r => setTimeout(r, 5000));
   
   Later Production upgrade path: Replace polling with CDC (Debezium + Kafka).
 */
-setInterval(async () => {
+async function pollOutbox() {
   try {
     // 1. FETCH — Get up to 10 unprocessed entries, ordered by fewest retries first
     const unprocessed = await prisma.outbox.findMany({
       where: {
         status: OutboxBullMQStatus.PENDING,
-        retries: { lt: 4 }  // Must match maxRetries in Outbox model
       },
       orderBy: [
         { retries: "asc" },    // Entries with fewest retries get priority
@@ -49,27 +50,21 @@ setInterval(async () => {
 
     // 2. PROCESS — Handle each entry
     for (const entry of unprocessed) {
-      // 2a. Mark as processing (prevents duplicate picks if we scale to multiple pollers)
-      await prisma.outbox.update({
-        where: { id: entry.id },
-        data: { status: OutboxBullMQStatus.PROCESSING }
-      });
-
       try {
-        // 2b. DELIVER — Route based on event type
+        // a. Publish based on event type i.e. it's a chaos or deployment?
         if (entry.eventType === "chaos-injected") {
-          // Chaos events: publish directly to Redis Pub/Sub.
-          // No BullMQ needed — just real-time notification.
-          await publishChaosInjected(entry);
+          // Chaos injected events, publish directly to Redis Pub/Sub.
+          // No BullMQ needed just real-time notification that a chaos has been injected.
+          await publishChaosInjected(entry as unknown as { payload: OutboxPayload });
         } else {
-          // Deployment events: add to BullMQ queue for worker processing.
-          // jobId = deploymentId ensures idempotency — duplicates are ignored.
+          // Add Deployment to BullMQ queue for worker to process it.
+          // jobId = deploymentId ensures idempotency, duplicates are ignored by BullMQ automatically, ensures processing only once at max.
           await deploymentQueue.add(entry.eventType, entry.payload, {
-            jobId: (entry.payload as any).deploymentId
+            jobId: (entry.payload as unknown as OutboxPayload).deploymentId
           });
         }
 
-        // 2c. Mark as completed — delivery succeeded
+        // b. Mark as completed adding to queue for deployment and publishing to redis pub/sub for chaos injection succeeded
         await prisma.outbox.update({
           where: { id: entry.id },
           data: {
@@ -79,8 +74,7 @@ setInterval(async () => {
         });
 
       } catch (err: any) {
-        // 2d. DELIVERY FAILED — Retry or abandon
-        
+        // c. Adding to queue or publishing to publisher failed, retry or abandon it
         const newRetries = entry.retries + 1;
         const isFailed = newRetries >= entry.maxRetries;
 
@@ -96,22 +90,26 @@ setInterval(async () => {
 
         // If permanently failed, mark deployment as failed and notify
         if (isFailed) {
-          await prisma.deployment.update({
-            where: { id: (entry.payload as any).deploymentId },
-            data: { status: DeploymentStatus.FAILED }
-          });
+          try {
+            await prisma.deployment.update({
+              where: { id: (entry.payload as unknown as OutboxPayload).deploymentId },
+              data: { status: DeploymentStatus.FAILED }
+            });
 
-          await publishOutboxFailed(
-            (entry.payload as any).deploymentId,
-            "Outbox delivery exhausted all retries."
-          );
-
+            await publishOutboxFailed(
+              (entry.payload as unknown as OutboxPayload).deploymentId,
+              "Outbox delivery exhausted all retries."
+            );
+          } catch (sideEffectErr: any) {
+            console.error(`Failure handling failed for outbox ${entry.id}: ${sideEffectErr.message}`);
+          }
           console.error(
-            `Outbox ${entry.id} | deployment ${(entry.payload as any).deploymentId} | PERMANENTLY FAILED | ${err.message}`
+            `Outbox ${entry.id} | deployment ${(entry.payload as unknown as OutboxPayload).deploymentId} | PERMANENTLY FAILED | ${err.message}`
           );
-        } else {
+        }
+        else {
           console.error(
-            `Outbox ${entry.id} | deployment ${(entry.payload as any).deploymentId} | Retry ${newRetries}/${entry.maxRetries} | ${err.message}`
+            `Outbox ${entry.id} | deployment ${(entry.payload as unknown as OutboxPayload).deploymentId} | Retry ${newRetries}/${entry.maxRetries} already done | ${err.message}`
           );
         }
       }
@@ -120,7 +118,11 @@ setInterval(async () => {
     // Outer catch — errors here don't crash the poller. Next interval retries.
     console.error(`Outbox poller error: ${err.message}`);
   }
-}, 5000);
+  finally {
+    setTimeout(pollOutbox, 5000);
+  }
+}
+pollOutbox();
 
 
 const worker = new Worker (
@@ -130,24 +132,48 @@ const worker = new Worker (
     const { deploymentId, resources } = job.data as DeploymentJob;
 
     try {
-      // 1. Mark as running
-      await prisma.deployment.update({
+      // 1. Mark deployment as running
+      const deploymentState = await prisma.deployment.findUnique({
         where: {
           id: deploymentId,
-        },
-        data: {
-          status: DeploymentStatus.RUNNING
         }
       });
+      
+      if(!deploymentState) { // If deployment with specified deploymentId doesn't exists
+        console.error(`Deployment ${deploymentId} not found in DB. Skipping stage.`);
+        return;
+      }
+
+      if (deploymentState.status === DeploymentStatus.COMPLETED) {
+        console.log(`Deployment ${deploymentId} already completed. Skipping.`);
+        return;
+      }
+
+      if (deploymentState.status === DeploymentStatus.FAILED) {
+        console.log(`Deployment ${deploymentId} already failed. Skipping.`);
+        return;
+      }
+
+      if(deploymentState.status !== DeploymentStatus.RUNNING) {
+        await prisma.deployment.update({
+          where: {
+            id: deploymentId,
+          },
+          data: {
+            status: DeploymentStatus.RUNNING
+          }
+        });
+      }
 
       // Publish as current deployment has started running
       await publishDeploymentStarted(deploymentId, resources.length);
-      console.log(`Deployment started ${deploymentId}`);
+      console.log(`Deployment started ${deploymentId}`);  
 
       
       // 2. Process each stage
-      for(const stage of DEPLOYMENT_STAGES) { // DEPLOYMENT_STAGES This is from the global shared constants file
+      for(const stage of DEPLOYMENT_STAGES_NAMES) { // DEPLOYMENT_STAGES_NAMES This is from the global shared constants file
         // Read the deployment from DB for each stage so that we could prevent stale data if something else modified it.
+
         // 0. Ckeck if this stage is already completed(idempotency)
         const currentDeployment = await prisma.deployment.findUnique({
           where: {
@@ -155,14 +181,17 @@ const worker = new Worker (
           }
         });
 
-        if(!currentDeployment) {
+        if(!currentDeployment) { // If deployment with specified deploymentId doesn't exists
           console.error(`Deployment ${deploymentId} not found in DB. Skipping stage.`);
           return;
         }
 
-        const existingStages: Stages[] = (currentDeployment?.stages as any) || [];
-        // Find which all existing changes already completed so that u can skip...
-        const alreadyDone = existingStages.some(existingStage => existingStage.name === stage && existingStage.status === "completed");
+        // Fetch all the stage positions in the deployment.
+        const existingStages: DeploymentStages[] = (currentDeployment?.stages as unknown as DeploymentStages[]) || [];
+        const currentTimeline: DeploymentTimeline[] = (currentDeployment?.timeline as unknown as DeploymentTimeline[]) || [];
+
+        // Find which all existing stages already completed so that u can skip...
+        const alreadyDone = existingStages.some(existingStage => existingStage.name === stage && existingStage.status === DeploymentStageStatus.COMPLETED);
 
         // Skip if already done
         if(alreadyDone) {
@@ -170,8 +199,8 @@ const worker = new Worker (
           continue;
         }
 
-        // Simulate work
-        let stateMessage = "";
+        // Simulate work for security and cost estimation
+        let stateMessage: string = "";
 
         switch(stage) {
           case "SecurityScan":
@@ -192,18 +221,16 @@ const worker = new Worker (
 
 
         // Add stage entry for current stage which will get updated to db finally
-        const currentStages = (currentDeployment?.stages as any[]) || [];
 
-        currentStages.push({
+        existingStages.push({
           name: stage,
-          status: "completed",
+          status: DeploymentStageStatus.COMPLETED,
           startedAt,
           completedAt: new Date().toISOString(),
           message: stateMessage
         });
 
         // Add timeline entry for current stage which will get updated to db finally
-        const currentTimeline = (currentDeployment?.timeline as any[]) || [];
         currentTimeline.push({
           timestamp: new Date().toISOString(),
           event: stage,
@@ -217,8 +244,8 @@ const worker = new Worker (
             id: deploymentId
           },
           data: {
-            stages: currentStages,
-            timeline: currentTimeline
+            stages: (existingStages as any),
+            timeline: (currentTimeline as any)
           }
         });
 
@@ -257,9 +284,13 @@ const worker = new Worker (
 
       // Publish that current deployment failed....
       await publishDeploymentFailed( deploymentId, `Deployment failed at some stage due to: ${err.message}`);
+
+      throw err; // This tells BullMQ that the deploymentJob failed due to worker crash or something it will retry on the basis of retries set in the queue.ts file...
     }
   },
   { 
-    connection: redis
+    connection: redis,
+    stalledInterval: 30000,  // How long to wait before marking stalled
+    maxStalledCount: 10      // How many times a job can stall before failing
   }
 )

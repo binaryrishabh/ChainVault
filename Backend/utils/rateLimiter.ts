@@ -1,70 +1,81 @@
 /**
  * CURRENT: Sliding Window Log - In-Memory Map
- * 
+ *
  * KNOWN ISSUES TO FIX (Phase 5 - Docker/Deployment):
- * 
+ *
  * 1. Trust Proxy: Behind Nginx, req.ip resolves to Nginx's internal IP.
  *    FIX: app.set('trust proxy', 1) + use X-Forwarded-For header.
- * 
+ *
  * 2. Multi-Instance: In-memory state doesn't scale beyond single process.
  *    FIX: Redis sorted sets (ZADD + ZREMRANGEBYSCORE + ZCARD).
  *    Each IP gets a sorted set. Score = timestamp. Expired entries auto-removed.
  *    ioredis already in dependencies for BullMQ (Phase 2).
- * 
+ *
  * 3. Memory: Map grows with unique IPs. Cleanup interval handles idle IPs,
  *    but high-traffic IPs keep full arrays. In production with 100K+ IPs,
  *    Redis with EXPIRE handles TTL automatically.
- * 
+ *
  * MIGRATION PLAN: Replace in-memory Map with Redis sorted sets during Phase 5.
  * Algorithm stays Sliding Window Log. Storage layer changes.
  */
 import type { Request, Response, NextFunction } from "express";
 
-const MAX_REQUESTS = 10;
-const TIME_WINDOW_MAX_SIZE = 15000; // 15 minutes
+const MAX_REQUESTS = 100;
+const TIME_WINDOW_MAX_SIZE = 15 * 60 * 1000; // 15 minutes
 
 // Rate limiting algorithm: Sliding Window Log
 const ipMap = new Map<string, number[]>();
 
-// Clean up ip's who never visited within TIME_WINDOW_MAX_SIZE minutes after there last interaction 
+// Clean up ip's who never visited within TIME_WINDOW_MAX_SIZE minutes after there last interaction
 // which helps to keep the map with interacting ips only.
 setInterval(() => {
-    for(const [key, value] of ipMap) {
-        if(value.length === 0 || Date.now() - value[value.length - 1]! > TIME_WINDOW_MAX_SIZE) {
-            ipMap.delete(key);
-        }
+  for (const [key, value] of ipMap) {
+    if (
+      value.length === 0 ||
+      Date.now() - value[value.length - 1]! > TIME_WINDOW_MAX_SIZE
+    ) {
+      ipMap.delete(key);
     }
+  }
 }, TIME_WINDOW_MAX_SIZE);
 
 export const rateLimiter = (req: Request, res: Response, next: NextFunction) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown" ;
-    const now = Date.now();
-    let timeStamp = ipMap.get(ip) || [];
+  if(req.path === "/health") { // Skip the health route
+    next();
+    return;
+  }
 
-    timeStamp = timeStamp.filter(timeStampLog => now - timeStampLog < TIME_WINDOW_MAX_SIZE);
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  let timeStamp = ipMap.get(ip) || [];
 
-    if(timeStamp.length < MAX_REQUESTS) {
-        timeStamp = [...timeStamp, now];
-        ipMap.set(ip, timeStamp);
-        res.setHeader("X-RateLimit-Limit", MAX_REQUESTS);
-        res.setHeader("X-RateLimit-Remaining", MAX_REQUESTS - timeStamp.length);
-        res.setHeader("X-RateLimit-Reset", timeStamp[0]! + TIME_WINDOW_MAX_SIZE);
-        next();
-        return;
-    }
-    else {
-        res.setHeader("Retry-After", Math.ceil((timeStamp[0]! + TIME_WINDOW_MAX_SIZE - now) / 1000)) // in seconds
-        res.setHeader("X-RateLimit-Limit", MAX_REQUESTS);
-        res.setHeader("X-RateLimit-Remaining", 0);
-        res.setHeader("X-RateLimit-Reset", timeStamp[0]! + TIME_WINDOW_MAX_SIZE);
-        res.status(429).json({
-            success: false,
-            message: "Too many requests"
-        })
-        return;
-    }
-}
+  timeStamp = timeStamp.filter(
+    (timeStampLog) => now - timeStampLog < TIME_WINDOW_MAX_SIZE,
+  );
 
+  if (timeStamp.length < MAX_REQUESTS) {
+    timeStamp = [...timeStamp, now];
+    ipMap.set(ip, timeStamp);
+    res.setHeader("X-RateLimit-Limit", MAX_REQUESTS);
+    res.setHeader("X-RateLimit-Remaining", MAX_REQUESTS - timeStamp.length);
+    res.setHeader("X-RateLimit-Reset", timeStamp[0]! + TIME_WINDOW_MAX_SIZE);
+    next();
+    return;
+  } else {
+    res.setHeader(
+      "Retry-After",
+      Math.ceil((timeStamp[0]! + TIME_WINDOW_MAX_SIZE - now) / 1000),
+    ); // in seconds
+    res.setHeader("X-RateLimit-Limit", MAX_REQUESTS);
+    res.setHeader("X-RateLimit-Remaining", 0);
+    res.setHeader("X-RateLimit-Reset", timeStamp[0]! + TIME_WINDOW_MAX_SIZE);
+    res.status(429).json({
+      success: false,
+      message: "Too many requests",
+    });
+    return;
+  }
+};
 
 // Rate limiting algorithm: Fixed Window Counter
 /* 

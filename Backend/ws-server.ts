@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import http from "http";
 import { subscribeToDeployment } from "./infra/pubsub";
-import { WebSocketMessage } from "@shared/types/WebSocketMessage.types"
+import { WebSocketMessage } from "@shared/enum/WebSocketMessage.enum"
 
 const httpSever = http.createServer((req: any, res: any) => {
   console.log("Http server 3001 connected successfully. The first handshake for websocket server.");
@@ -11,35 +11,35 @@ const httpSever = http.createServer((req: any, res: any) => {
 const wss = new WebSocketServer({ server: httpSever });
 
 wss.on("connection", (socket) => {
-  socket.on("error", (err) => console.error(err));
+  const subscribers: Array<{ quit: () => void }> = [];
 
-  socket.on("message", (data, isBinary) => {
+  socket.on("message", async(data) => {
     try {
       const message = JSON.parse(data.toString());
 
-      if(message.type === WebSocketMessage.Subscribe) {
+      if (message.type === WebSocketMessage.Subscribe) {
         const { deploymentId } = message;
 
-        console.log(`Client subscribed to deployment: ${deploymentId}`);
-        
-        // Subscribe to redis pub/sub for this deployment
-        subscribeToDeployment(deploymentId, (event) => {
-          // Forward event to this specific client
-          if(socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify(event));
+        const subscriber = await subscribeToDeployment(deploymentId, (event) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify(event));
           }
-        })
+        });
+
+        subscribers.push(subscriber);
       }
+    } catch (err) {
+      console.error("Invalid message from client: " + err);
     }
-    catch (err) {
-        console.error("Invalid message from client: "+ err);
-      }
   });
 
   socket.on("close", () => {
-    console.log("Client disconnected");
-    // Redis subscriptions auto cleanup when connection closes because subscriber.quit() is not called. Will fix later.
-  })
+    // Clean up all Redis subscribers when socket closes
+    for (const subscriber of subscribers) {
+      subscriber.quit();
+    }
+    console.log("Client disconnected. Cleaned up subscribers.");
+  });
 });
 
 httpSever.listen(3001);

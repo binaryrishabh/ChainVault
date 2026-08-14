@@ -1,16 +1,26 @@
 import { redis } from "./redis";
-import { Publish } from "@shared/types/Publish.types";
+import type { OutboxPayload } from "@shared/types/OutboxPayload.types";
+import { Publish } from "@shared/enum/Publish.enum";
+
 
 /* ------------------------Publisher code--------------------- */
 // These are publishers that the worker and outbox will call so that the client could be informed through web socket that what is going on behind at each step through subscribers.....
 
 // 0. The pushing of chaos notification directly to client through specific channel to which client has subscribed via websocket...
-export const publishChaosInjected = async(entry: any) => {
-  await redis.publish(`deployment:${(entry.payload as any).deploymentId}:updates`, JSON.stringify({
-    ...(entry.payload as any),
-    publishType: Publish.publishChaosInjected,
-    timestamp: new Date().toISOString()
-  })
+
+export const publishChaosInjected = async(entry: { payload: OutboxPayload }) => {
+  const outboxPayload = entry.payload;
+
+  await redis.publish(
+    `deployment:${outboxPayload.deploymentId}:updates`, 
+    JSON.stringify({
+      deploymentId: outboxPayload.deploymentId,
+      chaosType: outboxPayload.chaosType,
+      resourceId: outboxPayload.resourceId,
+      message: outboxPayload.message,
+      publishType: Publish.publishChaosInjected,
+      timestamp: new Date().toISOString()
+    })
   )
 }
 

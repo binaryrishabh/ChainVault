@@ -10,7 +10,7 @@ import { rateLimiter } from "./utils/rateLimiter";
 import { deploymentQueue } from "./infra/queue";
 import { InfrastructureIdSchema, InfrastructureBodySchema, UpdateInfrastructureBodySchema } from "./zod_schemas/infrastructure.schema";
 import { ChaosInjectionBodySchema, DeploymentIdSchema } from "./zod_schemas/deployment.schema";
-import { validateDeploymentReadiness } from "@shared/validateConnectionRules";
+import { DeploymentStatus } from "@shared/enum/DeploymentStatus.enum";
 
 app.use(rateLimiter);
 app.use(cors());
@@ -156,22 +156,23 @@ app.delete("/api/infrastructure/:infrastructureId", async(req, res) => {
   })
 })
 
-// delete all end point
-app.delete("/api/infrastructure", async(req, res) => {
-  const allDeletedInfrastructure = await prisma.infrastructure.deleteMany();
+// delete all end point only accessable while development
+if (config.NODE_ENV !== "production") {
+  app.delete("/api/infrastructure", async (req, res) => {
+    const allDeletedInfrastructure = await prisma.infrastructure.deleteMany();
 
-  if(allDeletedInfrastructure.count === 0) {
-    throw new NotFoundError("No infrastructure found to delete");
-  }
+    if (allDeletedInfrastructure.count === 0) {
+      throw new NotFoundError("No infrastructure found to delete");
+    }
 
-  res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Get all infrastructure",
+      message: "All infrastructure deleted",
       allDeletedInfrastructure
+    });
+    return;
   });
-  return;
-})
-
+}
 
 
 /* -----------------The Deployment CRUD code---------------------- */
@@ -199,13 +200,6 @@ app.post("/api/deployments", async(req, res) => {
 
   const resources = (infrastructure.layout as any).resources || [];
   const resourceCount = resources.length;
-
-  // Before deploying check the readiness of deployment as current resources could even be deployed or not.
-  // const deploymentReadiness = validateDeploymentReadiness(resources);
-  // if(!deploymentReadiness.valid) {
-    
-  //   throw new ValidationError("Cannot deploy:\n"+ deploymentReadiness.issues.join("\n"));
-  // }
 
   // Generating a uuid on our own because we are implementing the atmoicity on deployment and outbox table so if we stay dependent on the id created by the postgres when the deployment gets stored then we have to update the deploymentId field of the outbox table later on seperately. But, by this we can put the deploymentId value for both of them within same transaction.
   const deploymentId = crypto.randomUUID();
@@ -239,7 +233,7 @@ app.post("/api/deployments", async(req, res) => {
 })
 
 // Get dtails of existing deployment
-app.get("/api/deployment/:deploymentId", async(req, res) => {
+app.get("/api/deployments/:deploymentId", async(req, res) => {
   const DeploymentId = DeploymentIdSchema.safeParse(req.params);
 
   if(!DeploymentId.success) {
@@ -296,30 +290,31 @@ app.post("/api/deployments/:deploymentId/chaos", async(req, res) => {
     throw new NotFoundError("Deployemnt Not Found with specified id"+ deploymentId);
   }
 
-  if(deployment.status !==  "running") {
+  if(deployment.status !==  DeploymentStatus.RUNNING) {
     throw new ValidationError("Can only inject chaos into a running deployment");
   }
 
   // Add chaos event to deployment
-  const currentChaosEvent = (deployment.chaosEvents as any) || [];
-  currentChaosEvent.push({
-    timeStamp: new Date().toISOString(),
-    type,
-    resourceId,
-    message: `Chaos injected ${type} on ${resourceId}`
-  })
+  const [updatedDeploymentAfterChaosAdded] = await prisma.$transaction(async (tx) => {
+    // Re-read the latest deployment inside the transaction
+    const latestDeployment = await tx.deployment.findUnique({
+      where: { id: deploymentId }
+    });
 
-  // Update into deployment row i.e. DB
-  const [updatedDeploymentAfterChaosAdded] = await prisma.$transaction([
-    prisma.deployment.update({
-      where: {
-        id: deploymentId
-      },
-      data: {
-        chaosEvents: currentChaosEvent
-      }
-    }),
-    prisma.outbox.create({ // It's default status is pending...
+    const currentChaosEvents = (latestDeployment?.chaosEvents as any[]) || [];
+    currentChaosEvents.push({
+      timestamp: new Date().toISOString(),
+      type,
+      resourceId,
+      message: `Chaos injected ${type} on ${resourceId}`
+    });
+
+    const updated = await tx.deployment.update({
+      where: { id: deploymentId },
+      data: { chaosEvents: currentChaosEvents }
+    });
+
+    const outbox = await tx.outbox.create({
       data: {
         eventType: "chaos-injected",
         payload: {
@@ -329,8 +324,10 @@ app.post("/api/deployments/:deploymentId/chaos", async(req, res) => {
           message: `Chaos ${type} injected on resource`
         }
       }
-    })
-  ])
+    });
+
+    return [updated, outbox];
+  });
 
   res.status(200).json({
     success: true,
@@ -340,15 +337,17 @@ app.post("/api/deployments/:deploymentId/chaos", async(req, res) => {
 })
 
 // testing of adding resource to queue manually.
-app.post("/api/test-deploy", async(req, res) => {
-  await deploymentQueue.add("test-deployment", {
-    deploymentId: "test-123",
-    resources: ["vm", "database"]
-  });
-  res.status(200).json({
-    message: "Job added to queue"
+if (config.NODE_ENV !== "production") {
+  app.post("/api/test-deploy", async(req, res) => {
+    await deploymentQueue.add("test-deployment", {
+      deploymentId: "test-123",
+      resources: ["vm", "database"]
+    });
+    res.status(200).json({
+      message: "Job added to queue"
+    })
   })
-})
+}
 
 app.use(errorHandler)
 

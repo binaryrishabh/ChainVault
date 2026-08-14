@@ -1,8 +1,8 @@
 import { RESOURCE_TYPES } from "@shared/constants/RESOURCE_TYPES.constants";
 import type { Resource } from "@shared/types/Resource.types";
-import type { StageResult } from "@shared/types/StageResult.types";
+import type { DeploymentStageResult } from "@shared/types/DeploymentStageResult.types";
 
-export const runSecurityScan = (resources: Resource[]): StageResult => {
+export const runSecurityScan = (resources: Resource[]): DeploymentStageResult => {
   const issues: string[] = [];
 
   for(const resource of resources) {
