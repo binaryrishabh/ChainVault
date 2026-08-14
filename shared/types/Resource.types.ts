@@ -1,4 +1,4 @@
-import type { ResourceType } from "../constants";
+import type { ResourceType } from "../constants/RESOURCE_TYPES.constants";
 
 export interface Resource {
   id: string;

@@ -94,7 +94,11 @@ export function validateDeploymentReadiness(resources: Array<Resource>, connecti
   }
 
   // Minimum deployable setup
-  const deployableTypes: ResourceType[] = [RESOURCE_TYPES.VirtualMachine, RESOURCE_TYPES.Database, RESOURCE_TYPES.ObjectStorage];
+  const deployableTypes: ResourceType[] = [
+    RESOURCE_TYPES.VirtualMachine, 
+    RESOURCE_TYPES.Database, 
+    RESOURCE_TYPES.ObjectStorage
+  ];
   const hasDeployable = resources.some(resource => deployableTypes.includes(resource.type));
 
   if(!hasDeployable) {
@@ -107,7 +111,13 @@ export function validateDeploymentReadiness(resources: Array<Resource>, connecti
   }
 
   if(types.includes(RESOURCE_TYPES.MonitoringAgent)) {
-    const hasMonitored = types.some(type => [RESOURCE_TYPES.VirtualMachine, RESOURCE_TYPES.Database, RESOURCE_TYPES.Cache, RESOURCE_TYPES.MessageQueue].includes(type))
+    const monitoredTypes: ResourceType[] = [
+      RESOURCE_TYPES.VirtualMachine,
+      RESOURCE_TYPES.Database,
+      RESOURCE_TYPES.Cache,
+      RESOURCE_TYPES.MessageQueue
+    ];
+    const hasMonitored = types.some(type => monitoredTypes.includes(type));
     if(!hasMonitored) {
       warnings.push("Monitoring Agent has no resources to monitor");
     }
