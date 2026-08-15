@@ -7,4 +7,5 @@ export interface DeploymentStages {
   startedAt: string;
   completedAt: string;
   message: string;
+  details?: Record<string, any>;
 }
