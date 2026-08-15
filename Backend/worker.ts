@@ -201,15 +201,18 @@ const worker = new Worker (
 
         // Simulate work for security and cost estimation
         let stateMessage: string = "";
+        let stageDetails: Record<string, any> = {};
 
         switch(stage) {
           case "SecurityScan":
             const securityResult = runSecurityScan(resources);
             stateMessage = securityResult.summary;
+            stageDetails = securityResult.details;
             break;
           case "CostEstimate":
             const costResult = runCostEstimation(resources);
             stateMessage = costResult.summary;
+            stageDetails = costResult.details;
             break;
           default:
             stateMessage = `${stage} completed for ${resources.length} resources`;  
@@ -219,7 +222,6 @@ const worker = new Worker (
         
         await new Promise(waitHere => setTimeout(waitHere, 2000)); // Wait here for 2 seconds between each stage
 
-
         // Add stage entry for current stage which will get updated to db finally
 
         existingStages.push({
@@ -227,7 +229,8 @@ const worker = new Worker (
           status: DeploymentStageStatus.COMPLETED,
           startedAt,
           completedAt: new Date().toISOString(),
-          message: stateMessage
+          message: stateMessage,
+          details: stageDetails
         });
 
         // Add timeline entry for current stage which will get updated to db finally

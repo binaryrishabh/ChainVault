@@ -1,8 +1,8 @@
 import * as z from "zod";
-import { DEPLOYMENT_CHAOS } from "@shared/constants/DEPLOYMENT_CHAOS.constants";
+import { DeploymentChaosNames } from "@shared/enum/DeploymentChaosNames.enum";
 
 export const ChaosInjectionBodySchema = z.object({
-  type: z.enum(DEPLOYMENT_CHAOS, "Must be of the specified chaos type only"),
+  type: z.enum(DeploymentChaosNames, "Must be of the specified chaos type only"),
   resourceId: z.string("Must be of a string type")
 })
 

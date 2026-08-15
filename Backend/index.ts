@@ -174,13 +174,46 @@ if (config.NODE_ENV !== "production") {
   });
 }
 
+// get all deploments of an infrastructure
+app.get("/api/infrastructure/:infrastructureId/deployments", async(req, res) => {
+  const InfrastructureId = InfrastructureIdSchema.safeParse(req.params);
+
+  if(!InfrastructureId.success) {
+    const errorMessages = InfrastructureId.error.issues.map(err => err.message).join(", ");
+    throw new ValidationError(errorMessages);
+  }
+
+  const { infrastructureId } = InfrastructureId.data;
+
+  const infrastructure = await prisma.infrastructure.findUnique({
+    where: {
+      id: infrastructureId
+    },
+    include: {
+      deployments: true
+    }
+  });
+
+  if(!infrastructure) {
+    throw new NotFoundError("No infrastructure found with the provided infrastructure id");
+  }
+
+  const deployments = infrastructure.deployments;
+
+  res.status(200).json({
+    success: true,
+    message: "Fetched all the deploymnets related to the provided infrastructure id",
+    deployments
+  })
+})
+
+
 
 /* -----------------The Deployment CRUD code---------------------- */
 // Create new deployment
 app.post("/api/deployments", async(req, res) => {
   const InfrastructureId = InfrastructureIdSchema.safeParse(req.body);
   
-
   if(!InfrastructureId.success) {
     const errorMessages = InfrastructureId.error.issues.map(err => err.message).join(", ");
     throw new ValidationError(errorMessages);
