@@ -26,7 +26,7 @@ model Deployment {
   resourceCount         Int                         @default(0) // How many resources in this deployment
   stages                Json                        @default("[]") // Array of { timestamp, event, message }
   timeline              Json                        @default("[]") // Array of { timestamp, event, message }
-  chaosEvents           Json                        @default("[]") // Chaos injectiosn during deployment
+  chaosEvents           Json                        @default("[]") // Chaos injection during deployment
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
 }
