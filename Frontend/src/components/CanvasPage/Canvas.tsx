@@ -3,18 +3,19 @@ import { ManhattenLine } from "./ManhattenLine";
 import type { ConnectionLine } from "@shared/types/ConnectionLine.types";
 import type { Resource } from "@shared/types/Resource.types";
 import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants";
+import { ResourceIcon } from "./ResourceIcon";
 
 export interface CanvasProps {
   resources: Array<Resource>;
   onDeleteResource: (itemId: string) => void;
   onResourceClick: (resourceId: string, resourceType: ResourceType) => void;
-  connections: Array<ConnectionLine>;
+  connectionLines: Array<ConnectionLine>;
   selectedResource: string | null;
   isConnecting: boolean;
   onResourceDoubleClick: (resourceId: string) => void;
 }
 
-export function Canvas({ resources, onDeleteResource, onResourceClick, connections, selectedResource, isConnecting, onResourceDoubleClick }: CanvasProps) {
+export function Canvas({ resources, onDeleteResource, onResourceClick, connectionLines, selectedResource, isConnecting, onResourceDoubleClick }: CanvasProps) {
   const { setNodeRef } = useDroppable({
     id: "canvas",
   });
@@ -31,13 +32,13 @@ export function Canvas({ resources, onDeleteResource, onResourceClick, connectio
     >
       {/* Connecting lines SVG - behind resources */}
       <svg className="absolute inset-0 pointer-events-none z-10" width="100%" height="100%">
-        {connections.map(connection => {
-          const source = resources.find(resource => resource.id === connection.sourceId);
-          const target = resources.find(resource => resource.id === connection.targetId);
+        {connectionLines.map(connectionLine => {
+          const source = resources.find(resource => resource.id === connectionLine.sourceId);
+          const target = resources.find(resource => resource.id === connectionLine.targetId);
           if(!source || !target) {
             return null;
           }
-          return <ManhattenLine key={connection.id} source={source} target={target} port={connection.port}/>
+          return <ManhattenLine key={connectionLine.id} source={source} target={target} port={connectionLine.port}/>
         })}
       </svg>
 
@@ -45,13 +46,18 @@ export function Canvas({ resources, onDeleteResource, onResourceClick, connectio
       {resources.map((resource) => {
         return (
           <div
+            title={resource.type}
             key={resource.id}
-            className={`absolute group w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-lg select-none hover:ring-2 hover:ring-blue-500 cursor-pointer ${selectedResource === resource.id ? 'ring-2 ring-yellow-400': ''}`}
+            className={`absolute group w-12 h-12 rounded-lg bg-[#12161F] border flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+              selectedResource === resource.id 
+                ? "border-blue-500/60 ring-2 ring-blue-500/30" 
+                : "border-[#1F2633] hover:border-[#35415A]"
+            }`}
             style={{ left: resource.x, top: resource.y }}
             onClick={() => onResourceClick(resource.id, resource.type)}
             onDoubleClick={() => onResourceDoubleClick(resource.id)}
           >
-            {resource.emoji}
+            <ResourceIcon type={resource.type} size={20} />
             {isConnecting && (
               <>
                 {/* Post dots on Canvas Resources */}

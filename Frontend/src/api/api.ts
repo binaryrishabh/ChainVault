@@ -52,8 +52,8 @@ export const deleteInfrastructure = async(infrastructureId: string): Promise<Inf
 }
 
 // get all the deployment of an Infrastructure
-export const getDeploymentOfInfrastructure = async(infrastructureId: string): Promise<Deployment[]> => {
-  const response = await axios.get(`${API_URL}/infrastructure/:${infrastructureId}/deployments`);
+export const getDeploymentsOfInfrastructure = async(infrastructureId: string): Promise<Deployment[]> => {
+  const response = await axios.get(`${API_URL}/infrastructure/${infrastructureId}/deployments`);
 
   const deployments = response.data.deployments;
 

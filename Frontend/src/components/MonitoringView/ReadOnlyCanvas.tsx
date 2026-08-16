@@ -3,6 +3,7 @@ import type { ConnectionLine } from "@shared/types/ConnectionLine.types";
 import type { Resource } from "@shared/types/Resource.types";
 import { ManhattenLine } from "../CanvasPage/ManhattenLine";
 import { DeploymentChaosNames, type DeploymentChaosNamesType } from "@shared/enum/DeploymentChaosNames.enum";
+import { ResourceIcon } from "../CanvasPage/ResourceIcon";
 
 interface ReadOnlyCanvasProps {
   resources: Resource[];
@@ -34,13 +35,24 @@ export function ReadOnlyCanvas({ resources, connectionLines, chaosEvents }: Read
   }
 
   const stateColors: Record<ResourceStateType, string> = {
-    healthy: "bg-green-500/20 ring-green-500",
-    [DeploymentChaosNames.Crash]: "bg-red-500/20 ring-red-500 animate-pulse",
-    [DeploymentChaosNames.CpuSpike]: "bg-amber-500/20 ring-amber-500 animate-pulse",
-    [DeploymentChaosNames.NetworkDelay]: "bg-yellow-500/20 ring-yellow-500",
-    [DeploymentChaosNames.MemoryLeak]: "bg-yellow-500/20 ring-yellow-500",
-    [DeploymentChaosNames.DiskFailure]: "bg-red-500/20 ring-red-500",
-    degraded: "bg-yellow-500/20 ring-yellow-500",
+    healthy: "ring-green-500",
+    [DeploymentChaosNames.Crash]: "ring-red-500 animate-pulse",
+    [DeploymentChaosNames.CpuSpike]: "ring-amber-500 animate-pulse",
+    [DeploymentChaosNames.NetworkDelay]: "ring-yellow-500",
+    [DeploymentChaosNames.MemoryLeak]: "ring-yellow-500",
+    [DeploymentChaosNames.DiskFailure]: "ring-red-500",
+    degraded: "ring-yellow-500",
+  };
+
+  
+  const stateIconColors: Record<ResourceStateType, string> = {
+    healthy: "text-green-500",
+    [DeploymentChaosNames.Crash]: "text-red-500 animate-pulse",
+    [DeploymentChaosNames.CpuSpike]: "text-amber-500 animate-pulse",
+    [DeploymentChaosNames.NetworkDelay]: "text-yellow-500",
+    [DeploymentChaosNames.MemoryLeak]: "text-yellow-500",
+    [DeploymentChaosNames.DiskFailure]: "text-red-500",
+    degraded: "text-yellow-500"
   };
 
 
@@ -65,10 +77,11 @@ export function ReadOnlyCanvas({ resources, connectionLines, chaosEvents }: Read
         return (
           <div
             key={resource.id}
-            className={`absolute w-10 h-10 rounded-lg ring-2 flex items-center justify-center text-lg ${stateColors[state]}`}
+            className={`absolute w-12 h-12 rounded-lg ring-2 flex items-center justify-center text-lg ${stateColors[state]}`}
             style={{ left: resource.x, top: resource.y }}
+            title={resource.type}
           >
-            { resource.emoji }
+            <ResourceIcon type={resource.type} size={20} className={stateIconColors[state]}/>
           </div>
         )
       })}

@@ -1,14 +1,11 @@
 import { useDraggable } from "@dnd-kit/core"
+import { ResourceIcon } from "./ResourceIcon";
+import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants";
 
-export interface SidebarResourceProps {
-  emoji: string,
-  label: string
-}
-
-export function SidebarResource({ emoji, label }: SidebarResourceProps) {
+export function SidebarResource({ label }: { label: ResourceType }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: label, // SideBar Resource labels
-    data: { emoji, label }
+    data: { label }
   })
 
   // ref={ setNodeRef } tells which one is dragged currently
@@ -19,11 +16,11 @@ export function SidebarResource({ emoji, label }: SidebarResourceProps) {
       ref={ setNodeRef }
       { ...listeners }
       { ...attributes }
-      className='w-10 h-10 rounded-lg bg-gray-800 hover:bg-gray-700 cursor-grab flex items-center justify-center text-lg select-none'
-      style={ transform ? { opacity: 0.3, transform: "none" } : undefined }
-      title={label}
+      className='w-12 h-12 rounded-lg bg-[#12161F] border border-[#1F2633] hover:border-[#35415A] hover:bg-[#171C27] cursor-grab flex items-center justify-center transition-colors duration-150 group'
+      style={ transform ? { opacity: 0.4, transform: "none" } : undefined }
+      title={ label }
     >
-      { emoji }
+      <ResourceIcon type={label} size={20} />
     </div>
   )
 }

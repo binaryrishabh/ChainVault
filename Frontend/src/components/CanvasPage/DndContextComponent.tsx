@@ -1,5 +1,6 @@
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, MouseSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Canvas } from "./Canvas";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -8,10 +9,12 @@ import { DeploymentPipeline } from "../DeploymentView/DeploymentPipeline";
 import { ConfigPanelOfCanvasResource } from "./ConfigPanelOfCanvasResource";
 import { validateConnection } from "@shared/validateConnectionRules";
 import { RESOURCE_PORTS } from "@shared/constants/RESOURCE_PORTS.constants";
+import { ResourceIcon } from "./ResourceIcon";
 import type { Infrastructure } from "@shared/types/Infrastructure.types";
 import type { ConnectionLine } from "@shared/types/ConnectionLine.types";
 import type { ResourceType } from "@shared/constants/RESOURCE_TYPES.constants"
 import type { Resource } from "@shared/types/Resource.types";
+
 
 export function DndContextComponent() {
   const sensors = useSensors(
@@ -24,7 +27,7 @@ export function DndContextComponent() {
     useSensor(MouseSensor)
   )
 
-  const [activeDrag, setActiveDrag] = useState<{ emoji: string, label: string } | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{ label: ResourceType } | null>(null);
 
   const [canvasResources, setCanvasResources] = useState<Array<Resource>>([]);
 
@@ -42,12 +45,27 @@ export function DndContextComponent() {
   const [isDeploying, setIsDeploying] = useState(false);
 
   // state of connection lines/grids between the resources on canvas...
-  const [connections, setConnections] = useState<Array<ConnectionLine>>([]);
+  const [connectionLines, setConnectionLines] = useState<Array<ConnectionLine>>([]);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
   // On clicking the resources on canavs -> a side panel opens showing there details/config...
   const [selectedResourceForConfig, setSelectedResourceForConfig] = useState<string | null>(null);
+
+  // Set the state for undo/redo of resource elements on the canvas.
+  // This is for the undo stack....
+  const [ undoResourcesSnapshotStackTrace, setUndoResourcesSnapshotStackTrace ] = useState<Array<{
+    resource: Resource,
+    connectionLines: ConnectionLine[],
+    savedState: boolean
+  }>>([]);
+
+  // This is for the redo stack....
+  const [ redoResourcesSnapshotStackTrace, setRedoResourcesSnapshotStackTrace ] = useState<Array<{
+    resource: Resource,
+    connectionLines: ConnectionLine[],
+    savedState: boolean
+  }>>([]);
 
   /* ------Save the current state of canvas resources into localstorage prevents vanish on reloads----- */
   // state tracking for we have initialized the current state from localstorage or not
@@ -63,6 +81,7 @@ export function DndContextComponent() {
       setCurrentLayoutId(parsed.currentLayoutId);
       setCurrentLayoutName(parsed.currentLayoutName);
       setCurrentLayoutSaved(parsed.saved);
+      setConnectionLines(parsed.connectionLines || []);
     }
     setIsInitialized(true); // Mark i.e. we got the current state from localstorage
   }, []);
@@ -73,11 +92,12 @@ export function DndContextComponent() {
     
     localStorage.setItem("Infraforge_Infrastucture_Draft", JSON.stringify({
       canvasResources,
+      connectionLines,
       currentLayoutId,
       currentLayoutName,
       saved: currentLayoutSaved
     }));
-  }, [canvasResources, currentLayoutId, currentLayoutName, currentLayoutSaved]);
+  }, [canvasResources, currentLayoutId, currentLayoutName, connectionLines, currentLayoutSaved]);
 
   /* ----------------------Topbar dropdown------------------- */
   // fetch infrastructure to fill dropdown
@@ -92,7 +112,7 @@ export function DndContextComponent() {
       }
     }
     fetchInfrastructures();
-  }, [currentLayoutSaved, canvasResources])
+  }, [currentLayoutSaved, canvasResources]);
 
   // Handle open close of infrastructure dropdown button
   const handleOpenCloseDropDownNameClick = async() => {
@@ -102,18 +122,18 @@ export function DndContextComponent() {
   // Select particular infrastrcture from dropdown lists
   const handleSelectLayout = (infrastructure: Infrastructure) => {
     if(isDeploying) { // Deployement already in process
-      window.alert("A deployment is in progress. Can't select");
+      toast.warning("A deployment is in progress. Can't select");
       return;
     }
 
     setCurrentLayoutId(infrastructure.id);
     setCurrentLayoutName(infrastructure.name);
     setCanvasResources(infrastructure.layout.resources || []);
+    setConnectionLines(infrastructure.layout.connectionLines || []);
     setCurrentLayoutSaved(true);
     setShowLayoutDropdown(false);
     setActiveDeploymentId(null);
     setIsDeploying(false);
-    setConnections([]);
     setSelectedResource(null);
   }
 
@@ -131,7 +151,7 @@ export function DndContextComponent() {
     }
 
     return () => document.removeEventListener("click", handleClickOutsideRemoveDropdown)
-  }, [showLayoutDropdown])
+  }, [showLayoutDropdown]);
   
   /* ----------------------Topbar buttons------------------ */
   // New canvas button
@@ -152,9 +172,9 @@ export function DndContextComponent() {
     setCurrentLayoutId(null);
     setCurrentLayoutName(null);
     setCurrentLayoutSaved(true);
-    setActiveDeploymentId(null);
+    setActiveDeploymentId(null);  
     setIsDeploying(false);
-    setConnections([]);
+    setConnectionLines([]);
     setSelectedResource(null);
     localStorage.removeItem("Infraforge_Infrastucture_Draft");
   }
@@ -162,21 +182,24 @@ export function DndContextComponent() {
   // Infrastructure save button Make an input box for it and improve the UI
   const handleSave = async() => {
     if(isDeploying) { // Deployement already in process
-      window.alert("A deployment is in progress. Can't select");
+      toast.warning("A deployment is in progress. Can't select");
       return;
     }
 
     if(canvasResources.length === 0) {
-      alert("No resources on the canvas");
+      toast.warning("No resources on the canvas");
       return;
     }
     const name = window.prompt("Enter layout name:")?.trim();
     if(!name) {
-      alert("name can't be empty")
+      toast.warning("name can't be empty")
       return;
     }
     try {
-      const createdInfrastructure = await createInfrastructure(name, { resources: canvasResources });
+      const createdInfrastructure = await createInfrastructure(name, { 
+        resources: canvasResources,
+        connectionLines
+      });
       setCurrentLayoutId(createdInfrastructure.id);
       setCurrentLayoutName(createdInfrastructure.name);
       setCurrentLayoutSaved(true);
@@ -184,10 +207,10 @@ export function DndContextComponent() {
       setIsDeploying(false);
       
       console.log(createdInfrastructure.id);
-      alert("saved!");
+      toast.success("saved!");
     }
     catch(err) {
-      alert("Save failed");
+      toast.error("Save failed");
       console.log(err);      
     }
   }
@@ -195,39 +218,42 @@ export function DndContextComponent() {
   // Infrastructure update button
   const handleUpdate = async() => {
     if(isDeploying) { // Deployement already in process
-      window.alert("A deployment is in progress. Can't select");
+      toast.warning("A deployment is in progress. Can't select");
       return;
     }
 
     if(!currentLayoutId || !currentLayoutName) { // This will never happen
-      alert("Either current layout not saved or board is empty")
+      toast.warning("Either current layout not saved or board is empty")
       return;
     }
     const name = window.prompt("Update layout name:", currentLayoutName)?.trim();
     if(canvasResources.length === 0) {
-      alert("No resources on the canvas");
+      toast.warning("No resources on the canvas");
       return;
     }
     if(!name) {
-      alert("name can't be empty")
+      toast.warning("name can't be empty")
       return;
     }
 
     try {
       const updatedInfrastructure = await updateInfrastructure(currentLayoutId, { 
         name, 
-        layout: { resources: canvasResources }
+        layout: { 
+          resources: canvasResources,
+          connectionLines
+        }
       });
       setCurrentLayoutName(name);
       setCurrentLayoutSaved(true);
       setActiveDeploymentId(null);
       setIsDeploying(false);
 
-      alert("Updated!");
+      toast.success("Updated!");
       console.log("Updated: "+ updatedInfrastructure);
     }
     catch (err) {
-      alert("Update Failed");
+      toast.error("Update Failed");
       console.log(err);
     }
   }
@@ -235,12 +261,12 @@ export function DndContextComponent() {
   // Infrastructure delete button
   const handleDelete = async() => {
     if(isDeploying) { // Deployement already in process
-      window.alert("A deployment is in progress. Can't select");
+      toast.warning("A deployment is in progress. Can't select");
       return;
     }
 
     if(!currentLayoutId) {
-      alert("No layout loaded to delete")
+      toast.warning("No layout loaded to delete")
       return;
     }
     if(!currentLayoutSaved) {
@@ -261,15 +287,15 @@ export function DndContextComponent() {
       setIsInitialized(false);
       setActiveDeploymentId(null);
       setIsDeploying(false);
-      setConnections([]);
+      setConnectionLines([]);
       setSelectedResource(null);
 
       localStorage.removeItem("Infraforge_Infrastucture_Draft");
       console.log("deleted: "+ deletedInfrastructure); 
-      alert("Deleted!");
+      toast.success("Deleted!");
     }
     catch(err) {
-      alert("Delete failed")
+      toast.error("Delete failed")
       console.log(err);
     }
   }
@@ -277,17 +303,17 @@ export function DndContextComponent() {
   // Deploy button
   const handleDeploy = async () => { 
     if(isDeploying) { // Deployement already in process
-      window.alert("A deployment is in progress. Can't select");
+      toast.warning("A deployment is in progress. Can't select");
       return;
     }
 
     if(!currentLayoutId || !currentLayoutSaved) {
-      alert("Save the infrastructure first before deploying.");
+      toast.warning("Save the infrastructure first before deploying.");
       return;
     }
 
     if(canvasResources.length === 0 && !savedLayouts) {
-      alert("Add resources to the canvas before deploying.");
+      toast.warning("Add resources to the canvas before deploying.");
       return;
     }
 
@@ -314,25 +340,137 @@ export function DndContextComponent() {
   /* ----------------------Canvas Resources------------------ */
   // Delete canvas resource
   const handleDeleteCanvasResource = (resourceId: string) => {
-    if(isDeploying) {
-      return; // Deployment already in process
+    if(isDeploying) { // Deployement already in process
+      toast.warning("A deployment is in progress. Can't select");
+      return;
     }
-    setActiveDeploymentId(null);
-    setIsDeploying(false);
-    setCanvasResources(prev => {
-      const updtatedResources = prev.filter(resource => resource.id !== resourceId);
-      if(updtatedResources.length === 0) {
-        setCurrentLayoutSaved(true);  
-      }
-      return updtatedResources;
-    })
+
+    // Find particular resource on the canvas whse resourceId has been passed.
+    const resource = canvasResources.find(canvasResource => canvasResource.id === resourceId);
+
+    // Fing the resource whose resourceId has been passed and   has any connection or not
+    const touchingConnections = connectionLines.filter(
+      connectionLine => connectionLine.sourceId === resourceId || connectionLine.targetId === resourceId
+    )
+
+    if(resource) {
+      setUndoResourcesSnapshotStackTrace(prev => [...prev, {
+        resource,
+        connectionLines: touchingConnections,
+        savedState: currentLayoutSaved
+      }]);
+    }
+
+    // Delete resource
+    setCanvasResources(prev => prev.filter(resource => resource.id !== resourceId));
+
+    // Delete connectionLines touching this resource (fixes dangling connections)
+    setConnectionLines(prev => prev.filter(
+      connectionLine => connectionLine.sourceId !== resourceId && connectionLine.targetId !== resourceId
+    ))
+
     setCurrentLayoutSaved(false);
+
+    // Undo toast
+    toast("Resource deleted", {
+      action: {
+        label: "Undo",
+        onClick: handleUndoDelete
+      },
+      duration: 5000
+    })
   }
+
+  /* ---------- Undo/Redo Code ------------ */
+  // Undo Resource Delete handler
+  const handleUndoDelete = () => {
+    if(undoResourcesSnapshotStackTrace.length === 0) {
+      return;
+    }
+
+    setUndoResourcesSnapshotStackTrace(prev => {
+      if(prev.length === 0) {
+        return prev;
+      }
+
+      const lastResourceSnapshot = prev[prev.length - 1];
+
+      // Overlap check
+      const occupied = canvasResources.some(
+        resource => Math.abs(resource.x - lastResourceSnapshot.resource.x) < 40 && Math.abs(resource.y - lastResourceSnapshot.resource.y) < 40
+      )
+        
+      // Don't put as place is already been occupied
+      if(occupied) {
+        toast.warning("Can't undo - that spot is now occupied");
+        return prev.slice(0, -1); // Drop this lastResourceSnapshot and we don't place this one as potition has already been occupied, keep the rest.
+      }
+
+      // Add back to canvas
+      setCanvasResources(prev => [...prev, lastResourceSnapshot.resource]);
+      setConnectionLines(prev => [...prev, ...lastResourceSnapshot.connectionLines]);
+      setCurrentLayoutSaved(lastResourceSnapshot.savedState);
+
+      // Push to redo stack
+      setRedoResourcesSnapshotStackTrace(prev => [...prev, lastResourceSnapshot]);
+
+      return prev.slice(0, -1); // Remove from undo stack
+    });
+
+    toast.success("Resource restored");
+  }
+
+  // Redo Deleted Resouces from canvas handler
+  const handleRedoDelete = () => {
+    if(redoResourcesSnapshotStackTrace.length === 0) {
+      return;
+    }
+
+    setRedoResourcesSnapshotStackTrace(prev => {
+      if(prev.length === 0) {
+        return prev;
+      }
+
+      const lastResourceSnapshot = prev[prev.length - 1];
+
+      // Delete the resource + it's connections again that u have undo lately
+      setCanvasResources(prev => prev.filter(resource => resource.id !== lastResourceSnapshot.resource.id));
+      setConnectionLines(prev => prev.filter(resource => resource.sourceId !== lastResourceSnapshot.resource.id && resource.targetId !== lastResourceSnapshot.resource.id));
+
+      return prev.slice(0, -1);
+    })
+  }
+
+  // Cmd/Ctrl+z keyboard listener
+  useEffect(() => {
+    const handleKeyPressed = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      if((event.ctrlKey || event.metaKey) &&  event.key == "z" && !isInput && undoResourcesSnapshotStackTrace.length > 0) {
+        event.preventDefault();
+        handleUndoDelete();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyPressed);
+    return () => window.removeEventListener("keydown", handleKeyPressed);
+  }, [undoResourcesSnapshotStackTrace, canvasResources, connectionLines]);
 
   /* ----------------------CONNECTION LINES BETWEEN RESOURCES ON CANVAS------------------ */
   // Form connection line between 2 resources
   const hanldeResouceClick = (resourceId: string, resourceType: ResourceType) => {
     if(!isConnecting) {
+      return;
+    }
+
+    const alreadyConnectionLineExists = connectionLines.some(
+      connectionLine => connectionLine.sourceId === selectedResource && connectionLine.targetId === resourceId
+    )
+
+    if(alreadyConnectionLineExists) {
+      toast.warning("Connection already exists!");
+      setSelectedResource(null);
       return;
     }
 
@@ -352,15 +490,17 @@ export function DndContextComponent() {
       const validConnection = validateConnection(sourceItem.type, resourceType);
 
       if(!validConnection.valid) { // Check even connection is valid or not
-        alert(validConnection.message);
+        toast.warning(validConnection.message);
         setSelectedResource(null);
         return;
       }
 
       if(sourceItem) {
         const port = RESOURCE_PORTS[sourceItem.type] || 80;
+        
+        setCurrentLayoutSaved(false);
 
-        setConnections(prev => [...prev, {
+        setConnectionLines(prev => [...prev, {
           id: `connection-${Date.now()}`,
           sourceId: selectedResource,
           targetId: resourceId,
@@ -403,9 +543,8 @@ export function DndContextComponent() {
     <DndContext
       sensors={sensors}
       onDragStart={(event) => {
-        const emoji = event.active.data.current?.emoji;
-        const label = event.active.id as string;
-        setActiveDrag({ emoji, label })
+        const label = event.active.id as ResourceType;
+        setActiveDrag({ label })
         console.log("Drag started:", event.active.id)
       }}
       onDragEnd={(event) => {
@@ -418,7 +557,6 @@ export function DndContextComponent() {
           setIsInitialized(true); // saving to localstorage there was a new resource added to the canvas
 
           const { active, delta } = event;
-          const emoji = active.data.current?.emoji || "🖥";
 
           // Get the canvas element
           const canvas = document.querySelector("#canvas")as HTMLElement;
@@ -447,7 +585,7 @@ export function DndContextComponent() {
           )
 
           if(isOverlapping) {
-            // alert("Space already occupied!");
+            toast.warning("Space already occupied!");
             return;
           }
           
@@ -458,7 +596,6 @@ export function DndContextComponent() {
             {
               id: `${active.id}-${Date.now()}`,
               type: active.id as ResourceType,
-              emoji: emoji,
               x,
               y
             }
@@ -468,15 +605,15 @@ export function DndContextComponent() {
     >
       <DragOverlay>
         { activeDrag ? (
-          <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center text-lg select-none opacity-80">
-            { activeDrag.emoji }
+          <div className="w-12 h-12 rounded-lg bg-[#12162F] border border-[#35415A] flex items-center justify-center shadow-xl opacity-90">
+            <ResourceIcon type={activeDrag.label} size={24} className="text-blue-400" />
           </div>
         ): null }
       </DragOverlay>
       <div className="flex flex-col h-screen bg-[#0f1117] text-white">
         
         {/* Top Bar */}
-        <Topbar 
+        <Topbar
           showLayoutDropdown={showLayoutDropdown}
           savedLayouts={savedLayouts} 
           handleOpenCloseDropDownNameClick={handleOpenCloseDropDownNameClick} 
@@ -501,7 +638,7 @@ export function DndContextComponent() {
             resources={ canvasResources } 
             onDeleteResource={handleDeleteCanvasResource} 
             onResourceClick={hanldeResouceClick}
-            connections={connections}
+            connectionLines={connectionLines}
             selectedResource={selectedResource}
             isConnecting={isConnecting}
             onResourceDoubleClick={handleResourceDoubleClickShowConfig}

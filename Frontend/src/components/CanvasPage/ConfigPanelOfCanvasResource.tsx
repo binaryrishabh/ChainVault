@@ -1,5 +1,6 @@
 import { RESOURCE_PORTS } from "@shared/constants/RESOURCE_PORTS.constants";
 import type { Resource } from "@shared/types/Resource.types";
+import { ResourceIcon } from "./ResourceIcon";
 
 interface ConfigPanelOfCanvasResourceProps {
   resource: Resource | undefined;
@@ -21,7 +22,9 @@ export function ConfigPanelOfCanvasResource({ resource, onClose }: ConfigPanelOf
       <div className="space-y-3">
         <div>
           <p className="text-[10px] text-gray-500 uppercase"></p>
-          <p className="text-sm text-white">{resource.emoji} {resource.type}</p>
+          
+          <ResourceIcon type={ resource.type } size={24} />
+          <h3 className="text-sm font-semibold text-white mt-3">{resource.type }</h3>
         </div>
         <div>
           <p className="text-[10px] text-gray-500 uppercase">Position</p>
