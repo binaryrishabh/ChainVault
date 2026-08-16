@@ -3,7 +3,6 @@ import type { ResourceType } from "../constants/RESOURCE_TYPES.constants";
 export interface Resource {
   id: string;
   type: ResourceType; // "Virtual Machine", 'Database' — the KIND of resource
-  emoji: string;
   x: number;
   y: number;
   public?: boolean;
