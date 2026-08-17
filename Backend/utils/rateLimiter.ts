@@ -20,7 +20,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 
-const MAX_REQUESTS = 100;
+const MAX_REQUESTS = 1000;
 const TIME_WINDOW_MAX_SIZE = 15 * 60 * 1000; // 15 minutes
 
 // Rate limiting algorithm: Sliding Window Log
