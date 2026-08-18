@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CanvasDesignerPage } from "../features/canvas/components/CanvasDesignerPage";
-import { MonitoringDashboard } from "../MonitoringView/MonitoringDashboard";
+import { MonitoringDashboard } from "../features/monitoring/components/MonitoringDashboard";
 import { Toaster } from "sonner";
 
 function App() {
