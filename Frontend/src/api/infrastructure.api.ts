@@ -1,8 +1,7 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000/api";
-
 import type { Infrastructure } from "@shared/types/Infrastructure.types";
+import { API_URL } from "./httpClient";
 import type { Deployment } from "@shared/types/Deployment.types";
 
 /* ------------------Infrastructure api calls--------------- */
@@ -58,23 +57,4 @@ export const getDeploymentsOfInfrastructure = async(infrastructureId: string): P
   const deployments = response.data.deployments;
 
   return deployments;
-}
-
-/* ------------------Deployment api calls--------------- */
-// Create new deployment
-export const createDeployment = async(infrastructureId: string): Promise<Deployment> => {
-  const response = await axios.post(`${API_URL}/deployments`, {
-    infrastructureId
-  })
-
-  console.log(response.data.createdDeployment.id);
-
-  return response.data.createdDeployment;
-}
-
-// Fetch data of existing deployment
-export const getSpecificDeployment = async(deploymentId: string): Promise<Deployment> => {
-  const response = await axios.get(`${API_URL}/deployments/${deploymentId}`);
-  
-  return response.data.deployment;
 }
