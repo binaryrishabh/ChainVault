@@ -1,23 +1,7 @@
-import { RESOURCE_TYPES, type ResourceType } from "./constants/RESOURCE_TYPES.constants";
-import type { ConnectionLine } from "./types/ConnectionLine.types";
-import type { Resource } from "./types/Resource.types";
-
-/* A rule specifing between which resources connections could be done and which one will be the source and which one will be the target */
-export const CONNECTION_RULES: Record<ResourceType, Array<ResourceType>> = {
-  [RESOURCE_TYPES.DNS]: [RESOURCE_TYPES.CDN, RESOURCE_TYPES.LoadBalancer],
-  [RESOURCE_TYPES.CDN]: [RESOURCE_TYPES.LoadBalancer],
-  [RESOURCE_TYPES.Firewall]: [RESOURCE_TYPES.LoadBalancer, RESOURCE_TYPES.VirtualMachine, RESOURCE_TYPES.Database],
-  [RESOURCE_TYPES.LoadBalancer]: [RESOURCE_TYPES.VirtualMachine],
-  [RESOURCE_TYPES.VirtualMachine]: [RESOURCE_TYPES.Database, RESOURCE_TYPES.Cache, RESOURCE_TYPES.MessageQueue, RESOURCE_TYPES.ContainerRegistry, RESOURCE_TYPES.ObjectStorage],
-  [RESOURCE_TYPES.ContainerRegistry]: [],
-  [RESOURCE_TYPES.Cache]: [RESOURCE_TYPES.Database],
-  [RESOURCE_TYPES.Database]: [RESOURCE_TYPES.ObjectStorage],
-  [RESOURCE_TYPES.MessageQueue]: [RESOURCE_TYPES.VirtualMachine, RESOURCE_TYPES.Database],
-  [RESOURCE_TYPES.ObjectStorage]: [], // End node, receives connections, doesn't initiate a connection
-  [RESOURCE_TYPES.MonitoringAgent]: [RESOURCE_TYPES.VirtualMachine, RESOURCE_TYPES.Database, RESOURCE_TYPES.Cache, RESOURCE_TYPES.MessageQueue]
-} as const;
-
-export type CONNECTION_RULES_TYPE = typeof CONNECTION_RULES;
+import { RESOURCE_TYPES, type ResourceType } from "../constants/RESOURCE_TYPES.constants";
+import type { ConnectionLine } from "../types/ConnectionLine.types";
+import type { Resource } from "../types/Resource.types";
+import { CONNECTION_RULES } from "../constants/ConnectionRules.constants";
 
 // Function to validete the above defined rules
 export function validateConnection(sourceType: ResourceType, targetType: ResourceType): {valid: boolean, message: string} {
